@@ -23,8 +23,8 @@ You should write in a style that matches an experienced resale seller preparing 
 - optimized for search, but not spammy
 
 Primary goals:
-- Produce a clean, searchable AuctionNinja title
-- Produce a short, direct description
+- Produce clean, searchable AuctionNinja titles
+- Produce short, direct descriptions
 - Assign a broad category
 - Summarize condition honestly and neutrally
 - Generate useful search keywords
@@ -46,18 +46,53 @@ Important rules:
 - AuctionNinja style is preferred over Etsy or eBay style
 
 Field rules:
+- identification: what the item most likely is
+- confidence_note: short explanation of why this is a plausible identification, including uncertainty when needed
 - title: concise, searchable, AuctionNinja-appropriate
 - description: 1-2 short factual sentences
 - category: one broad resale category
 - condition_summary: short neutral condition note based on visible evidence and seller notes
 - keywords: comma-separated search phrases
 
-Return only valid JSON with these keys:
-title
-description
-category
-condition_summary
-keywords
+When identification is uncertain, produce the top three plausible identifications ranked from most likely to least likely.
+Each option should be meaningfully different if possible.
+Do not create artificial differences just to fill three slots.
+
+Return only valid JSON with this structure:
+{
+  "options": [
+    {
+      "rank": 1,
+      "identification": "",
+      "confidence_note": "",
+      "title": "",
+      "description": "",
+      "category": "",
+      "condition_summary": "",
+      "keywords": ""
+    },
+    {
+      "rank": 2,
+      "identification": "",
+      "confidence_note": "",
+      "title": "",
+      "description": "",
+      "category": "",
+      "condition_summary": "",
+      "keywords": ""
+    },
+    {
+      "rank": 3,
+      "identification": "",
+      "confidence_note": "",
+      "title": "",
+      "description": "",
+      "category": "",
+      "condition_summary": "",
+      "keywords": ""
+    }
+  ]
+}
 """.strip()
 
 
@@ -71,7 +106,6 @@ def _guess_mime_type(path: Path) -> str:
         return "image/webp"
     if suffix in {".heic", ".heif"}:
         return "image/heic"
-
     guessed, _ = mimetypes.guess_type(str(path))
     return guessed or "application/octet-stream"
 
@@ -80,7 +114,6 @@ def _parse_model_json(text: str) -> dict[str, Any]:
     raw = text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
-
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
@@ -105,14 +138,44 @@ def _build_image_content(image_paths: list[Path]) -> list[dict[str, str]]:
     return content
 
 
-def _normalize_output(data: dict[str, Any]) -> dict[str, str]:
+def _normalize_option(opt: dict[str, Any], rank: int) -> dict[str, str | int]:
     return {
-        "title": str(data.get("title", "")).strip(),
-        "description": str(data.get("description", "")).strip(),
-        "category": str(data.get("category", "Other")).strip() or "Other",
-        "condition_summary": str(data.get("condition_summary", "")).strip(),
-        "keywords": str(data.get("keywords", "")).strip(),
+        "rank": rank,
+        "identification": str(opt.get("identification", "")).strip(),
+        "confidence_note": str(opt.get("confidence_note", "")).strip(),
+        "title": str(opt.get("title", "")).strip(),
+        "description": str(opt.get("description", "")).strip(),
+        "category": str(opt.get("category", "Other")).strip() or "Other",
+        "condition_summary": str(opt.get("condition_summary", "")).strip(),
+        "keywords": str(opt.get("keywords", "")).strip(),
     }
+
+
+def _normalize_output(data: dict[str, Any]) -> dict[str, list[dict[str, str | int]]]:
+    raw_options = data.get("options", [])
+    if not isinstance(raw_options, list):
+        raw_options = []
+
+    normalized = []
+    for i, opt in enumerate(raw_options[:3], start=1):
+        if isinstance(opt, dict):
+            normalized.append(_normalize_option(opt, i))
+
+    while len(normalized) < 3:
+        normalized.append(
+            {
+                "rank": len(normalized) + 1,
+                "identification": "",
+                "confidence_note": "",
+                "title": "",
+                "description": "",
+                "category": "Other",
+                "condition_summary": "",
+                "keywords": "",
+            }
+        )
+
+    return {"options": normalized}
 
 
 class AuctionNinjaGenerator:
@@ -120,7 +183,7 @@ class AuctionNinjaGenerator:
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4.1")
 
-    def generate_listing(self, image_paths: list[Path], seller_notes: str = "") -> dict[str, str]:
+    def generate_options(self, image_paths: list[Path], seller_notes: str = "") -> dict[str, list[dict[str, str | int]]]:
         if not image_paths:
             raise ValueError("No images provided.")
 
@@ -130,7 +193,7 @@ class AuctionNinjaGenerator:
 {MASTER_INSTRUCTION}
 
 Task:
-Generate an AuctionNinja listing draft from the item photos and optional seller notes.
+Generate the top three plausible AuctionNinja listing options from the item photos and optional seller notes.
 
 Seller notes:
 {seller_notes if seller_notes else "None provided."}
@@ -153,43 +216,50 @@ Return only valid JSON.
         data = _parse_model_json(response.output_text)
         return _normalize_output(data)
 
-    def revise_listing(
+    def revise_option(
         self,
         image_paths: list[Path],
-        current_listing: dict[str, str],
+        current_option: dict[str, str],
         seller_notes: str = "",
         revision_request: str = "",
-    ) -> dict[str, str]:
+    ) -> dict[str, str | int]:
         if not image_paths:
             raise ValueError("No images provided for revision.")
-
-        seller_notes = seller_notes.strip()
-        revision_request = revision_request.strip()
 
         prompt = f"""
 {MASTER_INSTRUCTION}
 
 Task:
-Revise the current AuctionNinja listing draft using the same item photos, seller notes, and the user's requested changes.
+Revise the current AuctionNinja listing option using the same item photos, seller notes, and revision request.
 
-Current listing draft:
-title: {current_listing.get("title", "").strip()}
-description: {current_listing.get("description", "").strip()}
-category: {current_listing.get("category", "").strip()}
-condition_summary: {current_listing.get("condition_summary", "").strip()}
-keywords: {current_listing.get("keywords", "").strip()}
+Current option:
+identification: {current_option.get("identification", "").strip()}
+confidence_note: {current_option.get("confidence_note", "").strip()}
+title: {current_option.get("title", "").strip()}
+description: {current_option.get("description", "").strip()}
+category: {current_option.get("category", "").strip()}
+condition_summary: {current_option.get("condition_summary", "").strip()}
+keywords: {current_option.get("keywords", "").strip()}
 
 Seller notes:
-{seller_notes if seller_notes else "None provided."}
+{seller_notes.strip() if seller_notes.strip() else "None provided."}
 
 Revision request:
-{revision_request if revision_request else "No revision request provided."}
+{revision_request.strip() if revision_request.strip() else "No revision request provided."}
 
 Apply the requested changes when supported by the photos or seller notes.
 Do not invent facts.
-Keep the result concise and AuctionNinja-appropriate.
 
-Return only valid JSON.
+Return only valid JSON for one option with this structure:
+{
+  "identification": "",
+  "confidence_note": "",
+  "title": "",
+  "description": "",
+  "category": "",
+  "condition_summary": "",
+  "keywords": ""
+}
 """.strip()
 
         content = [{"type": "input_text", "text": prompt}]
@@ -201,4 +271,4 @@ Return only valid JSON.
         )
 
         data = _parse_model_json(response.output_text)
-        return _normalize_output(data)
+        return _normalize_option(data, 1)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Edit Lot Draft</title>
+  <title>Edit AuctionNinja Draft</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -15,18 +15,22 @@
       --accent-hover: #1d4ed8;
       --radius: 14px;
     }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
     }
+
     .wrap {
-      max-width: 980px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 18px;
     }
+
     .topbar {
       display: flex;
       flex-wrap: wrap;
@@ -35,11 +39,13 @@
       gap: 10px;
       margin-bottom: 16px;
     }
+
     .back-link {
       color: var(--accent);
       text-decoration: none;
       font-weight: 600;
     }
+
     .lot-preview {
       display: inline-block;
       padding: 10px 12px;
@@ -48,46 +54,71 @@
       border-radius: 10px;
       font-weight: 600;
     }
+
+    .flash {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #f5c2c7;
+      background: #f8d7da;
+      color: #842029;
+      font-size: 0.96rem;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: 1fr 1.2fr;
       gap: 18px;
     }
+
     .card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 16px;
       box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+      margin-bottom: 18px;
     }
-    h1, h2 {
+
+    h1, h2, h3 {
       margin-top: 0;
       line-height: 1.2;
     }
+
     h1 {
       font-size: 1.5rem;
       margin-bottom: 6px;
     }
+
     h2 {
       font-size: 1.08rem;
       margin-bottom: 12px;
     }
+
+    h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+
     .sub {
       margin-top: 0;
       color: var(--muted);
       font-size: 0.96rem;
     }
+
     .thumb-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
+
     .thumb {
       border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
       background: #fff;
     }
+
     .thumb img {
       display: block;
       width: 100%;
@@ -95,6 +126,7 @@
       object-fit: cover;
       background: #f3f4f6;
     }
+
     .thumb-name {
       padding: 8px 10px;
       font-size: 0.85rem;
@@ -102,6 +134,7 @@
       word-break: break-word;
       border-top: 1px solid var(--border);
     }
+
     .info-box {
       margin-top: 14px;
       padding: 12px;
@@ -109,24 +142,48 @@
       border-radius: 10px;
       background: #fafafa;
     }
+
     .info-box .label {
       font-weight: 700;
       margin-bottom: 6px;
     }
+
     .info-box .value {
       white-space: pre-wrap;
       color: var(--text);
       font-size: 0.95rem;
       line-height: 1.4;
     }
+
+    .option-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      background: #fcfcff;
+    }
+
+    .option-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      font-size: 0.95rem;
+    }
+
+    .option-label {
+      font-weight: 700;
+    }
+
     .field {
       margin-bottom: 14px;
     }
+
     label {
       display: block;
       font-weight: 600;
       margin-bottom: 7px;
     }
+
     input[type="text"],
     textarea,
     select {
@@ -138,26 +195,31 @@
       font: inherit;
       color: inherit;
     }
+
     textarea {
       resize: vertical;
       min-height: 88px;
     }
+
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 12px;
     }
+
     .grid-3 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 12px;
     }
+
     .button-row {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       margin-top: 18px;
     }
+
     button,
     .button-link {
       appearance: none;
@@ -172,36 +234,50 @@
       text-decoration: none;
       display: inline-block;
     }
+
     button:hover,
     .button-link:hover {
       background: var(--accent-hover);
     }
+
     .secondary {
       background: #e5e7eb;
       color: #111827;
     }
+
     .secondary:hover {
       background: #d1d5db;
     }
-    @media (max-width: 860px) {
+
+    .small-button {
+      padding: 10px 14px;
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 980px) {
       .layout {
         grid-template-columns: 1fr;
       }
     }
+
     @media (max-width: 640px) {
       .wrap {
         padding: 12px;
       }
+
       .card {
         padding: 14px;
       }
+
       .thumb-grid {
         grid-template-columns: 1fr;
       }
+
       .grid-2,
       .grid-3 {
         grid-template-columns: 1fr;
       }
+
       button,
       .button-link {
         width: 100%;
@@ -212,39 +288,125 @@
 </head>
 <body>
   <div class="wrap">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="flash">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
     <div class="topbar">
       <a class="back-link" href="{{ url_for('index') }}">← Back to upload</a>
       <div class="lot-preview">Next lot number on save: {{ next_lot }}</div>
     </div>
 
     <div class="layout">
-      <div class="card">
-        <h1>Review Photos</h1>
-        <p class="sub">Check the uploaded images and the extra details used during analysis.</p>
+      <div>
+        <div class="card">
+          <h1>Review Photos</h1>
+          <p class="sub">Compare the AI listing options, choose the best fit, then edit and save.</p>
 
-        <div class="thumb-grid">
-          {% for image_file in image_files %}
-            <div class="thumb">
-              <img src="{{ image_url_prefix }}{{ image_file }}" alt="Uploaded image">
-              <div class="thumb-name">{{ image_file }}</div>
+          <div class="thumb-grid">
+            {% for image_file in image_files %}
+              <div class="thumb">
+                <img src="{{ image_url_prefix }}{{ image_file }}" alt="Uploaded image">
+                <div class="thumb-name">{{ image_file }}</div>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if seller_notes %}
+            <div class="info-box">
+              <div class="label">Seller Notes</div>
+              <div class="value">{{ seller_notes }}</div>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h2>AI Identification Options</h2>
+          <p class="sub">Pick the option that best fits the item. Option 1 is the default starting point.</p>
+
+          {% for option in options %}
+            <div class="option-card">
+              <h3>Option {{ option.rank }}</h3>
+              <div class="option-grid">
+                <div><span class="option-label">Identification:</span> {{ option.identification }}</div>
+                <div><span class="option-label">Confidence Note:</span> {{ option.confidence_note }}</div>
+                <div><span class="option-label">Title:</span> {{ option.title }}</div>
+                <div><span class="option-label">Description:</span> {{ option.description }}</div>
+                <div><span class="option-label">Category:</span> {{ option.category }}</div>
+                <div><span class="option-label">Condition:</span> {{ option.condition_summary }}</div>
+                <div><span class="option-label">Keywords:</span> {{ option.keywords }}</div>
+              </div>
+
+              <form action="{{ url_for('choose_option') }}" method="post" style="margin-top: 12px;">
+                <input type="hidden" name="temp_id" value="{{ temp_id }}">
+                <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
+
+                {% for op in options %}
+                  <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
+                  <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+                  <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
+                  <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
+                  <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
+                  <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
+                  <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+                {% endfor %}
+
+                <input type="hidden" name="chosen_rank" value="{{ option.rank }}">
+
+                <input type="hidden" name="Identification" value="{{ form['Identification'] }}">
+                <input type="hidden" name="Confidence Note" value="{{ form['Confidence Note'] }}">
+                <input type="hidden" name="Title" value="{{ form['Title'] }}">
+                <input type="hidden" name="Description" value="{{ form['Description'] }}">
+                <input type="hidden" name="Condition Summary" value="{{ form['Condition Summary'] }}">
+                <input type="hidden" name="Keywords" value="{{ form['Keywords'] }}">
+                <input type="hidden" name="Category" value="{{ form['Category'] }}">
+                <input type="hidden" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
+                <input type="hidden" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
+                <input type="hidden" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
+                <input type="hidden" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
+                <input type="hidden" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
+                <input type="hidden" name="Reference #" value="{{ form['Reference #'] }}">
+                <input type="hidden" name="Item Notes" value="{{ form['Item Notes'] }}">
+                <input type="hidden" name="Consigner #" value="{{ form['Consigner #'] }}">
+                <input type="hidden" name="Shipping Available" value="{{ form['Shipping Available'] }}">
+
+                <button type="submit" class="small-button">Use This Option</button>
+              </form>
             </div>
           {% endfor %}
         </div>
+      </div>
 
-        {% if additional_info %}
-          <div class="info-box">
-            <div class="label">Additional info provided before analysis</div>
-            <div class="value">{{ additional_info }}</div>
-          </div>
-        {% endif %}
+      <div>
+        <div class="card">
+          <h2>Ask AI for Changes</h2>
+          <p class="sub">Revise the currently selected draft without losing your other manual fields.</p>
 
-        <div class="info-box">
-          <div class="label">Ask AI for changes</div>
           <form action="{{ url_for('revise') }}" method="post">
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
-            <input type="hidden" name="additional_info" value="{{ additional_info }}">
+            <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
-            <input type="hidden" name="Condition notes" value="{{ form['Condition notes'] }}">
+            {% for op in options %}
+              <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
+              <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+              <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
+              <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
+              <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
+              <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
+              <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+            {% endfor %}
+
+            <input type="hidden" name="Identification" value="{{ form['Identification'] }}">
+            <input type="hidden" name="Confidence Note" value="{{ form['Confidence Note'] }}">
+            <input type="hidden" name="Title" value="{{ form['Title'] }}">
+            <input type="hidden" name="Description" value="{{ form['Description'] }}">
+            <input type="hidden" name="Condition Summary" value="{{ form['Condition Summary'] }}">
+            <input type="hidden" name="Keywords" value="{{ form['Keywords'] }}">
+            <input type="hidden" name="Category" value="{{ form['Category'] }}">
             <input type="hidden" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
             <input type="hidden" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
             <input type="hidden" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
@@ -256,13 +418,36 @@
             <input type="hidden" name="Shipping Available" value="{{ form['Shipping Available'] }}">
 
             <div class="field">
-              <label for="revision_request">Revision request</label>
-              <textarea id="revision_request" name="revision_request" rows="4" placeholder="Examples: Add that it is 8 inches. Make the description shorter. Remove any mention of brand. Include that it is marked 925.">{{ revision_request or "" }}</textarea>
+              <label for="revision_request">Revision Request</label>
+              <textarea id="revision_request" name="revision_request" rows="4" placeholder="Examples: Make the title shorter. Mention the 8 inch measurement. Remove the brand reference. Use more cautious wording.">{{ revision_request or "" }}</textarea>
+            </div>
+
+            <div class="button-row">
+              <button type="submit">Revise with AI</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>Final Edit Before Save</h2>
+
+          <form action="{{ url_for('save') }}" method="post">
+            <input type="hidden" name="temp_id" value="{{ temp_id }}">
+            <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
+
+            <div class="field">
+              <label for="Identification">Identification</label>
+              <textarea id="Identification" name="Identification" rows="2">{{ form['Identification'] }}</textarea>
             </div>
 
             <div class="field">
-              <label for="Lead">Title</label>
-              <textarea id="Lead" name="Lead" rows="3">{{ form['Lead'] }}</textarea>
+              <label for="Confidence Note">Confidence Note</label>
+              <textarea id="Confidence Note" name="Confidence Note" rows="2">{{ form['Confidence Note'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Title">Title</label>
+              <textarea id="Title" name="Title" rows="3">{{ form['Title'] }}</textarea>
             </div>
 
             <div class="field">
@@ -271,8 +456,13 @@
             </div>
 
             <div class="field">
-              <label for="Tags">Tags</label>
-              <textarea id="Tags" name="Tags" rows="3">{{ form['Tags'] }}</textarea>
+              <label for="Condition Summary">Condition Summary</label>
+              <textarea id="Condition Summary" name="Condition Summary" rows="3">{{ form['Condition Summary'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Keywords">Keywords</label>
+              <textarea id="Keywords" name="Keywords" rows="3">{{ form['Keywords'] }}</textarea>
             </div>
 
             <div class="field">
@@ -284,106 +474,63 @@
               </select>
             </div>
 
+            <div class="grid-2">
+              <div class="field">
+                <label for="Low Estimate ($)">Low Estimate ($)</label>
+                <input type="text" id="Low Estimate ($)" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
+              </div>
+
+              <div class="field">
+                <label for="High Estimate ($)">High Estimate ($)</label>
+                <input type="text" id="High Estimate ($)" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
+              </div>
+            </div>
+
+            <div class="grid-3">
+              <div class="field">
+                <label for="Dimensions - Length">Dimensions - Length</label>
+                <input type="text" id="Dimensions - Length" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
+              </div>
+
+              <div class="field">
+                <label for="Dimensions - Depth">Dimensions - Depth</label>
+                <input type="text" id="Dimensions - Depth" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
+              </div>
+
+              <div class="field">
+                <label for="Dimensions - Height">Dimensions - Height</label>
+                <input type="text" id="Dimensions - Height" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="field">
+                <label for="Reference #">Reference #</label>
+                <input type="text" id="Reference #" name="Reference #" value="{{ form['Reference #'] }}">
+              </div>
+
+              <div class="field">
+                <label for="Consigner #">Consigner #</label>
+                <input type="text" id="Consigner #" name="Consigner #" value="{{ form['Consigner #'] }}">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="Item Notes">Item Notes</label>
+              <textarea id="Item Notes" name="Item Notes" rows="4">{{ form['Item Notes'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Shipping Available">Shipping Available</label>
+              <input type="text" id="Shipping Available" name="Shipping Available" value="{{ form['Shipping Available'] }}" placeholder="Yes / No">
+            </div>
+
             <div class="button-row">
-              <button type="submit">Revise with AI</button>
+              <button type="submit">Save to CSV</button>
+              <a class="button-link secondary" href="{{ url_for('index') }}">Cancel</a>
             </div>
           </form>
         </div>
-      </div>
-
-      <div class="card">
-        <h2>Edit Listing Before Save</h2>
-
-        <form action="{{ url_for('save') }}" method="post">
-          <input type="hidden" name="temp_id" value="{{ temp_id }}">
-
-          <div class="field">
-            <label for="Lead_save">Title</label>
-            <textarea id="Lead_save" name="Lead" rows="3">{{ form['Lead'] }}</textarea>
-          </div>
-
-          <div class="field">
-            <label for="Description_save">Description</label>
-            <textarea id="Description_save" name="Description" rows="4">{{ form['Description'] }}</textarea>
-          </div>
-
-          <div class="field">
-            <label for="Condition notes_save">Condition notes</label>
-            <textarea id="Condition notes_save" name="Condition notes" rows="3">{{ form['Condition notes'] }}</textarea>
-          </div>
-
-          <div class="grid-2">
-            <div class="field">
-              <label for="Low Estimate ($)_save">Low Estimate ($)</label>
-              <input type="text" id="Low Estimate ($)_save" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
-            </div>
-
-            <div class="field">
-              <label for="High Estimate ($)_save">High Estimate ($)</label>
-              <input type="text" id="High Estimate ($)_save" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
-            </div>
-          </div>
-
-          <div class="grid-3">
-            <div class="field">
-              <label for="Dimensions - Length_save">Dimensions - Length</label>
-              <input type="text" id="Dimensions - Length_save" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
-            </div>
-
-            <div class="field">
-              <label for="Dimensions - Depth_save">Dimensions - Depth</label>
-              <input type="text" id="Dimensions - Depth_save" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
-            </div>
-
-            <div class="field">
-              <label for="Dimensions - Height_save">Dimensions - Height</label>
-              <input type="text" id="Dimensions - Height_save" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="Tags_save">Tags</label>
-            <textarea id="Tags_save" name="Tags" rows="3">{{ form['Tags'] }}</textarea>
-          </div>
-
-          <div class="grid-2">
-            <div class="field">
-              <label for="Reference #_save">Reference #</label>
-              <input type="text" id="Reference #_save" name="Reference #" value="{{ form['Reference #'] }}">
-            </div>
-
-            <div class="field">
-              <label for="Consigner #_save">Consigner #</label>
-              <input type="text" id="Consigner #_save" name="Consigner #" value="{{ form['Consigner #'] }}">
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="Item Notes_save">Item Notes</label>
-            <textarea id="Item Notes_save" name="Item Notes" rows="4">{{ form['Item Notes'] }}</textarea>
-          </div>
-
-          <div class="grid-2">
-            <div class="field">
-              <label for="Shipping Available_save">Shipping Available</label>
-              <input type="text" id="Shipping Available_save" name="Shipping Available" value="{{ form['Shipping Available'] }}" placeholder="Yes / No">
-            </div>
-
-            <div class="field">
-              <label for="Category_save">Category</label>
-              <select id="Category_save" name="Category">
-                {% for category in categories %}
-                  <option value="{{ category }}" {% if form['Category'] == category %}selected{% endif %}>{{ category }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-
-          <div class="button-row">
-            <button type="submit">Save to CSV</button>
-            <a class="button-link secondary" href="{{ url_for('index') }}">Cancel</a>
-          </div>
-        </form>
       </div>
     </div>
   </div>

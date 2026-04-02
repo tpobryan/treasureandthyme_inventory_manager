@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Auction Lot Draft</title>
+  <title>AuctionNinja Listing Generator</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -16,8 +16,6 @@
       --danger-bg: #fef2f2;
       --danger-border: #fecaca;
       --danger-text: #991b1b;
-      --success-bg: #eff6ff;
-      --success-border: #bfdbfe;
       --radius: 14px;
     }
 
@@ -31,7 +29,7 @@
     }
 
     .wrap {
-      max-width: 760px;
+      max-width: 860px;
       margin: 0 auto;
       padding: 18px;
     }
@@ -94,8 +92,7 @@
     }
 
     input[type="file"],
-    textarea,
-    input[type="text"] {
+    textarea {
       width: 100%;
       padding: 12px;
       border: 1px solid var(--border);
@@ -133,12 +130,12 @@
       background: var(--accent-hover);
     }
 
-    .secondary {
+    button.secondary {
       background: #e5e7eb;
       color: #111827;
     }
 
-    .secondary:hover {
+    button.secondary:hover {
       background: #d1d5db;
     }
 
@@ -146,6 +143,69 @@
       margin-top: 18px;
       color: var(--muted);
       font-size: 0.92rem;
+    }
+
+    .selected-box {
+      margin-top: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fafafa;
+      padding: 12px;
+    }
+
+    .selected-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .selected-count {
+      font-weight: 600;
+    }
+
+    .file-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    .file-name {
+      word-break: break-word;
+      flex: 1;
+    }
+
+    .remove-btn {
+      border: 0;
+      background: #ef4444;
+      color: white;
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .remove-btn:hover {
+      background: #dc2626;
+    }
+
+    .empty-note {
+      color: var(--muted);
+      font-size: 0.95rem;
     }
 
     @media (max-width: 640px) {
@@ -164,6 +224,15 @@
       button {
         width: 100%;
       }
+
+      .file-item {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .remove-btn {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -178,49 +247,55 @@
     {% endwith %}
 
     <div class="card">
-      <h1>Auction Lot Draft</h1>
+      <h1>AuctionNinja Listing Generator</h1>
       <p class="sub">
-        Upload item photos, optionally add details that are not visible in the images, then review and edit before saving to CSV.
+        Add photos from your library or take them one at a time, build up the photo set here, then analyze.
       </p>
 
       <div class="lot-preview">Next lot number: {{ next_lot }}</div>
 
-      <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+      <form id="analyzeForm" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
         <div class="field">
-          <label for="photos">Photos</label>
+          <label for="photoInput">Add Photos</label>
           <input
-            id="photos"
-            name="photos"
+            id="photoInput"
             type="file"
             accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/*"
             multiple
-            required
           >
           <div class="help">
-            Choose one or more photos from your device. iPhone photo library selection works here.
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="additional_info">Additional info</label>
-          <textarea
-            id="additional_info"
-            name="additional_info"
-            rows="5"
-            placeholder="Examples:
-Marked sterling on back
-Approx. 2 inches
-Unsigned but bought as artisan studio pottery
-Small chip on rim
-Necklace is 17 inches long"
-          ></textarea>
-          <div class="help">
-            Use this for information that cannot be determined from the photos but should be considered in the title, description, tags, or category.
+            You can open this repeatedly. Each new selection or camera photo will be added to the current batch instead of replacing it.
           </div>
         </div>
 
         <div class="button-row">
-          <button type="submit">Analyze Photos</button>
+          <button type="button" id="addMoreButton">Add More Photos</button>
+          <button type="button" class="secondary" id="clearPhotosButton">Clear Photos</button>
+        </div>
+
+        <div class="selected-box">
+          <div class="selected-header">
+            <div class="selected-count">Selected photos: <span id="photoCount">0</span></div>
+          </div>
+          <div id="fileList" class="file-list"></div>
+          <div id="emptyNote" class="empty-note">No photos added yet.</div>
+        </div>
+
+        <div class="field" style="margin-top:16px;">
+          <label for="seller_notes">Seller Notes</label>
+          <textarea
+            id="seller_notes"
+            name="seller_notes"
+            rows="5"
+            placeholder="Examples: marked sterling, bracelet 8 inches, small chip on rim, not tested, bought as studio pottery"
+          ></textarea>
+          <div class="help">
+            Add facts that are not visible in the photos.
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button type="submit" id="analyzeButton">Analyze</button>
         </div>
       </form>
 
@@ -229,5 +304,109 @@ Necklace is 17 inches long"
       </div>
     </div>
   </div>
+
+  <script>
+    const analyzeForm = document.getElementById("analyzeForm");
+    const photoInput = document.getElementById("photoInput");
+    const addMoreButton = document.getElementById("addMoreButton");
+    const clearPhotosButton = document.getElementById("clearPhotosButton");
+    const fileList = document.getElementById("fileList");
+    const emptyNote = document.getElementById("emptyNote");
+    const photoCount = document.getElementById("photoCount");
+
+    let selectedFiles = [];
+
+    function fileKey(file) {
+      return [file.name, file.size, file.lastModified, file.type].join("|");
+    }
+
+    function renderSelectedFiles() {
+      fileList.innerHTML = "";
+      photoCount.textContent = String(selectedFiles.length);
+      emptyNote.style.display = selectedFiles.length ? "none" : "block";
+
+      selectedFiles.forEach((file, index) => {
+        const row = document.createElement("div");
+        row.className = "file-item";
+
+        const name = document.createElement("div");
+        name.className = "file-name";
+        name.textContent = `${index + 1}. ${file.name}`;
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "remove-btn";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+          selectedFiles.splice(index, 1);
+          renderSelectedFiles();
+        });
+
+        row.appendChild(name);
+        row.appendChild(remove);
+        fileList.appendChild(row);
+      });
+    }
+
+    function addFiles(fileListObj) {
+      const existing = new Set(selectedFiles.map(fileKey));
+
+      for (const file of fileListObj) {
+        const key = fileKey(file);
+        if (!existing.has(key)) {
+          selectedFiles.push(file);
+          existing.add(key);
+        }
+      }
+
+      renderSelectedFiles();
+      photoInput.value = "";
+    }
+
+    photoInput.addEventListener("change", (event) => {
+      if (event.target.files && event.target.files.length) {
+        addFiles(event.target.files);
+      }
+    });
+
+    addMoreButton.addEventListener("click", () => {
+      photoInput.click();
+    });
+
+    clearPhotosButton.addEventListener("click", () => {
+      selectedFiles = [];
+      photoInput.value = "";
+      renderSelectedFiles();
+    });
+
+    analyzeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      if (!selectedFiles.length) {
+        alert("Please add at least one photo.");
+        return;
+      }
+
+      const formData = new FormData();
+      for (const file of selectedFiles) {
+        formData.append("photos", file, file.name);
+      }
+
+      const sellerNotes = document.getElementById("seller_notes").value || "";
+      formData.append("seller_notes", sellerNotes);
+
+      const response = await fetch(analyzeForm.action, {
+        method: "POST",
+        body: formData
+      });
+
+      const html = await response.text();
+      document.open();
+      document.write(html);
+      document.close();
+    });
+
+    renderSelectedFiles();
+  </script>
 </body>
 </html>
