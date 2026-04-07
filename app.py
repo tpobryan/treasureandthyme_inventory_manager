@@ -91,6 +91,70 @@ LOCK_TIMEOUT_SECONDS = 10
 LOCK_POLL_INTERVAL_SECONDS = 0.1
 
 
+def render_edit_page(
+    temp_id: str,
+    saved_files: list[Path],
+    seller_notes: str,
+    options: list[dict],
+    form: dict[str, str],
+    revision_request: str = "",
+):
+    return render_template(
+        "edit.html",
+        temp_id=temp_id,
+        image_files=[p.name for p in saved_files],
+        image_url_prefix=f"/uploads/{temp_id}/",
+        next_lot=get_next_lot_preview(),
+        categories=DEFAULT_CATEGORIES,
+        seller_notes=seller_notes,
+        revision_request=revision_request,
+        options=options,
+        form=form,
+    )
+
+
+def _read_lock_pid(lock_path: Path) -> int | None:
+    try:
+        raw = lock_path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+
+    if not raw.isdigit():
+        return None
+    return int(raw)
+
+
+def _pid_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    else:
+        return True
+
+
+def _clear_stale_lock(lock_path: Path) -> bool:
+    pid = _read_lock_pid(lock_path)
+
+    if pid is not None and _pid_is_running(pid):
+        return False
+
+    try:
+        lock_path.unlink()
+        return True
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+
+
 @contextmanager
 def state_lock(lock_path: Path, timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
     deadline = time.monotonic() + timeout_seconds
@@ -103,6 +167,8 @@ def state_lock(lock_path: Path, timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
         except OSError as exc:
             if exc.errno != errno.EEXIST:
                 raise
+            if _clear_stale_lock(lock_path):
+                continue
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"Timed out waiting for lock: {lock_path.name}")
             time.sleep(LOCK_POLL_INTERVAL_SECONDS)
@@ -438,6 +504,40 @@ def form_from_option(option: dict, seller_notes: str = "") -> dict[str, str]:
     return form
 
 
+def parse_decimal_field(value: str) -> float | None:
+    cleaned = value.strip().replace("$", "").replace(",", "")
+    if not cleaned:
+        return None
+    return float(cleaned)
+
+
+def validate_save_form(form: dict[str, str]) -> list[str]:
+    errors: list[str] = []
+
+    if not form.get("Title", "").strip():
+        errors.append("Title is required before saving.")
+
+    low_raw = form.get("Low Estimate ($)", "")
+    high_raw = form.get("High Estimate ($)", "")
+
+    try:
+        low_value = parse_decimal_field(low_raw)
+    except ValueError:
+        errors.append("Low Estimate ($) must be a number if provided.")
+        low_value = None
+
+    try:
+        high_value = parse_decimal_field(high_raw)
+    except ValueError:
+        errors.append("High Estimate ($) must be a number if provided.")
+        high_value = None
+
+    if low_value is not None and high_value is not None and low_value > high_value:
+        errors.append("Low Estimate ($) cannot be greater than High Estimate ($).")
+
+    return errors
+
+
 def combine_item_notes(form: dict[str, str]) -> str:
     parts = []
 
@@ -490,15 +590,10 @@ def analyze():
         flash(f"AI analysis failed: {exc}")
         return redirect(url_for("index"))
 
-    return render_template(
-        "edit.html",
+    return render_edit_page(
         temp_id=temp_id,
-        image_files=[p.name for p in saved_files],
-        image_url_prefix=f"/uploads/{temp_id}/",
-        next_lot=get_next_lot_preview(),
-        categories=DEFAULT_CATEGORIES,
+        saved_files=saved_files,
         seller_notes=seller_notes,
-        revision_request="",
         options=options,
         form=form,
     )
@@ -543,15 +638,10 @@ def choose_option():
         ]:
             form[key] = current_form.get(key, "")
 
-    return render_template(
-        "edit.html",
+    return render_edit_page(
         temp_id=temp_id,
-        image_files=[p.name for p in saved_files],
-        image_url_prefix=f"/uploads/{temp_id}/",
-        next_lot=get_next_lot_preview(),
-        categories=DEFAULT_CATEGORIES,
+        saved_files=saved_files,
         seller_notes=seller_notes,
-        revision_request="",
         options=options,
         form=form,
     )
@@ -603,15 +693,10 @@ def revise():
         app.logger.exception("AI revision failed")
         flash(f"AI revision failed: {exc}")
 
-    return render_template(
-        "edit.html",
+    return render_edit_page(
         temp_id=temp_id,
-        image_files=[p.name for p in saved_files],
-        image_url_prefix=f"/uploads/{temp_id}/",
-        next_lot=get_next_lot_preview(),
-        categories=DEFAULT_CATEGORIES,
+        saved_files=saved_files,
         seller_notes=seller_notes,
-        revision_request="",
         options=options,
         form=form,
     )
@@ -621,13 +706,28 @@ def revise():
 def save():
     temp_id = request.form.get("temp_id", "").strip()
     temp_dir = UPLOADS_DIR / temp_id
+    seller_notes = request.form.get("seller_notes", "").strip()
 
     if not temp_id or not temp_dir.exists():
         flash("Could not find uploaded images for this draft.")
         return redirect(url_for("index"))
 
-    form = form_from_request(seller_notes=request.form.get("seller_notes", "").strip())
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    form = form_from_request(seller_notes=seller_notes)
+    options = options_from_request()
     title = form["Title"]
+
+    validation_errors = validate_save_form(form)
+    if validation_errors:
+        for error in validation_errors:
+            flash(error)
+        return render_edit_page(
+            temp_id=temp_id,
+            saved_files=saved_files,
+            seller_notes=seller_notes,
+            options=options,
+            form=form,
+        )
 
     csv_lot_number = reserve_next_lot()
 

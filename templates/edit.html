@@ -445,6 +445,18 @@
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
             <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
+            {% for op in options %}
+              <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
+              <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+              <input type="hidden" name="option_{{ op.rank }}_material_notes" value="{{ op.material_notes }}">
+              <input type="hidden" name="option_{{ op.rank }}_mark_notes" value="{{ op.mark_notes }}">
+              <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
+              <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
+              <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
+              <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
+              <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+            {% endfor %}
+
             <div class="field">
               <label for="Identification">Identification</label>
               <textarea id="Identification" name="Identification" rows="2">{{ form['Identification'] }}</textarea>
