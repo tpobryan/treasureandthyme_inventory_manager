@@ -28,31 +28,51 @@ Primary goals:
 - Assign a broad category
 - Summarize condition honestly and neutrally
 - Generate useful search keywords
+- Identify plausible materials and visible marks carefully
+- Surface uncertainty instead of guessing
 
 Important rules:
 - Rely first on what is visible in the photos
 - Use seller notes only when provided
 - Never invent facts
 - Do not claim brand, maker, material, age, origin, authenticity, or rarity unless visible in the photos or explicitly provided in seller notes
-- If something is uncertain, use cautious wording such as "appears", "possibly", "likely", "unmarked", or "not tested"
+- If something is uncertain, use cautious wording such as "appears", "possibly", "likely", "unmarked", "not tested", or "illegible mark"
 - Do not use hype, salesy, or flowery language
 - Do not exaggerate rarity, age, or value
 - Do not use words like "stunning", "gorgeous", "beautiful", "must-have", "museum quality", "rare", or "antique" unless directly supported
-- Mention visible wear, damage, chips, cracks, losses, staining, patina, scratches, or other flaws in neutral language when visible
+- Mention visible wear, damage, chips, cracks, losses, staining, patina, scratches, dents, or other flaws in neutral language when visible
 - Keep titles SEO-friendly but not overstuffed
 - Keep descriptions brief and practical
 - Prefer short factual wording over storytelling
-- When seller notes provide dimensions, markings, or flaws, include them where useful
 - AuctionNinja style is preferred over Etsy or eBay style
+
+Material and mark handling:
+- Look carefully for visible clues about material, such as sterling marks, karat marks, glaze, clay body, molded glass, metal tone, wood grain, stone texture, etc.
+- Look carefully for visible signatures, maker's marks, hallmarks, stamps, tags, labels, inscriptions, or purity marks
+- If a mark is clearly visible, you may state it
+- If a mark is only partly visible, use cautious wording such as "appears marked" or "possibly signed"
+- If no mark is visible, do not invent one
+- Prefer "gold tone" over "gold" when unsupported
+- Prefer "silver tone" over "sterling silver" when unsupported
+- Prefer "appears to be glass" or "possibly ceramic" when uncertain
+- Do not claim gemstones unless clearly supported by the photos or seller notes
+
+Keyword rules:
+- Generate 10 to 15 useful comma-separated search phrases
+- Include material, form, style, use, and maker related keywords when supported
+- Do not include unsupported maker or material keywords
+- Keep keywords practical for resale search
 
 Field rules:
 - identification: what the item most likely is
-- confidence_note: short explanation of why this is a plausible identification, including uncertainty when needed
+- confidence_note: short explanation of why this is plausible, including uncertainty when needed
+- material_notes: short note about visible material clues and level of certainty
+- mark_notes: short note about visible marks, signatures, tags, or lack of marks
 - title: concise, searchable, AuctionNinja-appropriate
 - description: 1-2 short factual sentences
 - category: one broad resale category
 - condition_summary: short neutral condition note based on visible evidence and seller notes
-- keywords: comma-separated search phrases
+- keywords: 10-15 comma-separated search phrases
 
 When identification is uncertain, produce the top three plausible identifications ranked from most likely to least likely.
 Each option should be meaningfully different if possible.
@@ -65,6 +85,8 @@ Return only valid JSON with this structure:
       "rank": 1,
       "identification": "",
       "confidence_note": "",
+      "material_notes": "",
+      "mark_notes": "",
       "title": "",
       "description": "",
       "category": "",
@@ -75,6 +97,8 @@ Return only valid JSON with this structure:
       "rank": 2,
       "identification": "",
       "confidence_note": "",
+      "material_notes": "",
+      "mark_notes": "",
       "title": "",
       "description": "",
       "category": "",
@@ -85,6 +109,8 @@ Return only valid JSON with this structure:
       "rank": 3,
       "identification": "",
       "confidence_note": "",
+      "material_notes": "",
+      "mark_notes": "",
       "title": "",
       "description": "",
       "category": "",
@@ -114,6 +140,7 @@ def _parse_model_json(text: str) -> dict[str, Any]:
     raw = text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
+
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
@@ -143,6 +170,8 @@ def _normalize_option(opt: dict[str, Any], rank: int) -> dict[str, str | int]:
         "rank": rank,
         "identification": str(opt.get("identification", "")).strip(),
         "confidence_note": str(opt.get("confidence_note", "")).strip(),
+        "material_notes": str(opt.get("material_notes", "")).strip(),
+        "mark_notes": str(opt.get("mark_notes", "")).strip(),
         "title": str(opt.get("title", "")).strip(),
         "description": str(opt.get("description", "")).strip(),
         "category": str(opt.get("category", "Other")).strip() or "Other",
@@ -151,29 +180,33 @@ def _normalize_option(opt: dict[str, Any], rank: int) -> dict[str, str | int]:
     }
 
 
+def _blank_option(rank: int) -> dict[str, str | int]:
+    return {
+        "rank": rank,
+        "identification": "",
+        "confidence_note": "",
+        "material_notes": "",
+        "mark_notes": "",
+        "title": "",
+        "description": "",
+        "category": "Other",
+        "condition_summary": "",
+        "keywords": "",
+    }
+
+
 def _normalize_output(data: dict[str, Any]) -> dict[str, list[dict[str, str | int]]]:
     raw_options = data.get("options", [])
     if not isinstance(raw_options, list):
         raw_options = []
 
-    normalized = []
+    normalized: list[dict[str, str | int]] = []
     for i, opt in enumerate(raw_options[:3], start=1):
         if isinstance(opt, dict):
             normalized.append(_normalize_option(opt, i))
 
     while len(normalized) < 3:
-        normalized.append(
-            {
-                "rank": len(normalized) + 1,
-                "identification": "",
-                "confidence_note": "",
-                "title": "",
-                "description": "",
-                "category": "Other",
-                "condition_summary": "",
-                "keywords": "",
-            }
-        )
+        normalized.append(_blank_option(len(normalized) + 1))
 
     return {"options": normalized}
 
@@ -183,7 +216,11 @@ class AuctionNinjaGenerator:
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4.1")
 
-    def generate_options(self, image_paths: list[Path], seller_notes: str = "") -> dict[str, list[dict[str, str | int]]]:
+    def generate_options(
+        self,
+        image_paths: list[Path],
+        seller_notes: str = "",
+    ) -> dict[str, list[dict[str, str | int]]]:
         if not image_paths:
             raise ValueError("No images provided.")
 
@@ -201,6 +238,7 @@ Seller notes:
 Use seller notes only as supplied facts.
 Do not invent missing details.
 If the photos are unclear, use cautious wording.
+Prefer practical resale phrasing.
 
 Return only valid JSON.
 """.strip()
@@ -226,41 +264,58 @@ Return only valid JSON.
         if not image_paths:
             raise ValueError("No images provided for revision.")
 
+        seller_notes = seller_notes.strip()
+        revision_request = revision_request.strip()
+
         prompt = f"""
-{MASTER_INSTRUCTION}
+    {MASTER_INSTRUCTION}
 
-Task:
-Revise the current AuctionNinja listing option using the same item photos, seller notes, and revision request.
+    Task:
+    Revise the current AuctionNinja listing option using the same item photos, seller notes, and revision request.
 
-Current option:
-identification: {current_option.get("identification", "").strip()}
-confidence_note: {current_option.get("confidence_note", "").strip()}
-title: {current_option.get("title", "").strip()}
-description: {current_option.get("description", "").strip()}
-category: {current_option.get("category", "").strip()}
-condition_summary: {current_option.get("condition_summary", "").strip()}
-keywords: {current_option.get("keywords", "").strip()}
+    Important revision behavior:
+    - Preserve the current option's overall identification and direction unless the revision request clearly asks to change it
+    - Make the smallest reasonable changes needed to satisfy the revision request
+    - Do not rewrite everything from scratch unless necessary
+    - Keep the same general title approach, category, and identification unless the user asks otherwise or the current version is clearly unsupported
+    - Preserve cautious wording where appropriate
+    - Do not become more certain unless the photos or seller notes support it
+    - If the revision request conflicts with the photos or seller notes, keep the safer factual version
 
-Seller notes:
-{seller_notes.strip() if seller_notes.strip() else "None provided."}
+    Current option:
+    identification: {current_option.get("identification", "").strip()}
+    confidence_note: {current_option.get("confidence_note", "").strip()}
+    material_notes: {current_option.get("material_notes", "").strip()}
+    mark_notes: {current_option.get("mark_notes", "").strip()}
+    title: {current_option.get("title", "").strip()}
+    description: {current_option.get("description", "").strip()}
+    category: {current_option.get("category", "").strip()}
+    condition_summary: {current_option.get("condition_summary", "").strip()}
+    keywords: {current_option.get("keywords", "").strip()}
 
-Revision request:
-{revision_request.strip() if revision_request.strip() else "No revision request provided."}
+    Seller notes:
+    {seller_notes if seller_notes else "None provided."}
 
-Apply the requested changes when supported by the photos or seller notes.
-Do not invent facts.
+    Revision request:
+    {revision_request if revision_request else "No revision request provided."}
 
-Return only valid JSON for one option with this structure:
-{
-  "identification": "",
-  "confidence_note": "",
-  "title": "",
-  "description": "",
-  "category": "",
-  "condition_summary": "",
-  "keywords": ""
-}
-""".strip()
+    Output requirements:
+    - Return only valid JSON
+    - Return one revised option only
+    - Keep the same field structure
+    - Stay concise and AuctionNinja-appropriate
+
+    Return JSON with these keys:
+    identification
+    confidence_note
+    material_notes
+    mark_notes
+    title
+    description
+    category
+    condition_summary
+    keywords
+    """.strip()
 
         content = [{"type": "input_text", "text": prompt}]
         content.extend(_build_image_content(image_paths))
@@ -271,4 +326,21 @@ Return only valid JSON for one option with this structure:
         )
 
         data = _parse_model_json(response.output_text)
-        return _normalize_option(data, 1)
+        revised = _normalize_option(data, 1)
+
+        # Soft fallback: preserve key fields if the model returns them blank
+        for key, fallback in {
+            "identification": current_option.get("identification", ""),
+            "confidence_note": current_option.get("confidence_note", ""),
+            "material_notes": current_option.get("material_notes", ""),
+            "mark_notes": current_option.get("mark_notes", ""),
+            "title": current_option.get("title", ""),
+            "description": current_option.get("description", ""),
+            "category": current_option.get("category", "Other"),
+            "condition_summary": current_option.get("condition_summary", ""),
+            "keywords": current_option.get("keywords", ""),
+        }.items():
+            if not str(revised.get(key, "")).strip():
+                revised[key] = fallback.strip() if isinstance(fallback, str) else fallback
+
+        return revised

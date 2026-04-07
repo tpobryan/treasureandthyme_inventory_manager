@@ -334,6 +334,8 @@
               <div class="option-grid">
                 <div><span class="option-label">Identification:</span> {{ option.identification }}</div>
                 <div><span class="option-label">Confidence Note:</span> {{ option.confidence_note }}</div>
+                <div><span class="option-label">Material Notes:</span> {{ option.material_notes }}</div>
+                <div><span class="option-label">Mark Notes:</span> {{ option.mark_notes }}</div>
                 <div><span class="option-label">Title:</span> {{ option.title }}</div>
                 <div><span class="option-label">Description:</span> {{ option.description }}</div>
                 <div><span class="option-label">Category:</span> {{ option.category }}</div>
@@ -348,6 +350,8 @@
                 {% for op in options %}
                   <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
                   <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+                  <input type="hidden" name="option_{{ op.rank }}_material_notes" value="{{ op.material_notes }}">
+                  <input type="hidden" name="option_{{ op.rank }}_mark_notes" value="{{ op.mark_notes }}">
                   <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
                   <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
                   <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
@@ -359,6 +363,8 @@
 
                 <input type="hidden" name="Identification" value="{{ form['Identification'] }}">
                 <input type="hidden" name="Confidence Note" value="{{ form['Confidence Note'] }}">
+                <input type="hidden" name="Material Notes" value="{{ form['Material Notes'] }}">
+                <input type="hidden" name="Mark Notes" value="{{ form['Mark Notes'] }}">
                 <input type="hidden" name="Title" value="{{ form['Title'] }}">
                 <input type="hidden" name="Description" value="{{ form['Description'] }}">
                 <input type="hidden" name="Condition Summary" value="{{ form['Condition Summary'] }}">
@@ -393,6 +399,8 @@
             {% for op in options %}
               <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
               <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+              <input type="hidden" name="option_{{ op.rank }}_material_notes" value="{{ op.material_notes }}">
+              <input type="hidden" name="option_{{ op.rank }}_mark_notes" value="{{ op.mark_notes }}">
               <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
               <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
               <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
@@ -402,6 +410,8 @@
 
             <input type="hidden" name="Identification" value="{{ form['Identification'] }}">
             <input type="hidden" name="Confidence Note" value="{{ form['Confidence Note'] }}">
+            <input type="hidden" name="Material Notes" value="{{ form['Material Notes'] }}">
+            <input type="hidden" name="Mark Notes" value="{{ form['Mark Notes'] }}">
             <input type="hidden" name="Title" value="{{ form['Title'] }}">
             <input type="hidden" name="Description" value="{{ form['Description'] }}">
             <input type="hidden" name="Condition Summary" value="{{ form['Condition Summary'] }}">
@@ -443,6 +453,16 @@
             <div class="field">
               <label for="Confidence Note">Confidence Note</label>
               <textarea id="Confidence Note" name="Confidence Note" rows="2">{{ form['Confidence Note'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Material Notes">Material Notes</label>
+              <textarea id="Material Notes" name="Material Notes" rows="2">{{ form['Material Notes'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Mark Notes">Mark Notes</label>
+              <textarea id="Mark Notes" name="Mark Notes" rows="2">{{ form['Mark Notes'] }}</textarea>
             </div>
 
             <div class="field">

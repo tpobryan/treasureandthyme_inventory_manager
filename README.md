@@ -12,7 +12,8 @@ What it does:
 ## Files created by the app
 - `data/auction_items.csv`
 - `data/lot_state.json`
-- temporary image uploads in `uploads/`
+- `data/auction_photo_state.json` when FTP uploads are enabled
+- temporary and saved image folders in `data/uploads/`
 
 ## Setup
 
@@ -29,6 +30,8 @@ Install packages:
 pip install -r requirements.txt
 ```
 
+The requirements include `Pillow` and `pillow-heif` so the app can open and optimize iPhone/iPad HEIC photos before sending them to OpenAI or saving JPGs locally.
+
 Copy the environment file and add your API key:
 
 ```bash
@@ -42,6 +45,17 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4.1-mini
 FLASK_SECRET_KEY=some-random-secret
 PORT=5000
+```
+
+Optional FTP settings for uploading saved lot photos to AuctionNinja:
+
+```env
+AUCTION_NUMBER=
+FTP_HOST=
+FTP_PORT=21
+FTP_USERNAME=
+FTP_PASSWORD=
+FTP_TLS=false
 ```
 
 ## Run it
@@ -87,5 +101,6 @@ waitress-serve --host 0.0.0.0 --port 5000 app:app
 ## Notes
 - The final lot number is assigned when you click **Save to CSV**.
 - The next lot preview is shown before save.
-- If two people save at the exact same time, the app uses a simple lock to avoid duplicate lot numbers.
+- Lot numbers and FTP photo indexes are stored in local JSON state files under `data/`.
+- If you run the app for multiple users at once, treat it as a small local tool rather than a concurrency-safe multi-user system.
 - The built-in Flask server is fine on a trusted home network, but Flask's docs recommend a production WSGI server such as Waitress for anything beyond development.

@@ -1,4 +1,6 @@
 /data/
 /uploads/
+__pycache__/
+.venv/
 .DS_Store
 .env
