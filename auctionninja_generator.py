@@ -137,17 +137,41 @@ def _guess_mime_type(path: Path) -> str:
 
 
 def _parse_model_json(text: str) -> dict[str, Any]:
+    def try_load(candidate: str) -> dict[str, Any] | None:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    def repair_json(candidate: str) -> str:
+        repaired = candidate
+        repaired = re.sub(r",(\s*[}\]])", r"\1", repaired)
+        repaired = re.sub(
+            r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)',
+            r'\1"\2"\3',
+            repaired,
+        )
+        return repaired
+
     raw = text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
 
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        raise ValueError(f"Could not parse model response as JSON: {raw}")
+    for candidate in (cleaned, repair_json(cleaned)):
+        parsed = try_load(candidate)
+        if parsed is not None:
+            return parsed
+
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if match:
+        extracted = match.group(0)
+        for candidate in (extracted, repair_json(extracted)):
+            parsed = try_load(candidate)
+            if parsed is not None:
+                return parsed
+
+    raise ValueError(f"Could not parse model response as JSON: {raw}")
 
 
 def _build_image_content(image_paths: list[Path]) -> list[dict[str, str]]:

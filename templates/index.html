@@ -16,6 +16,8 @@
       --danger-bg: #fef2f2;
       --danger-border: #fecaca;
       --danger-text: #991b1b;
+      --danger-button: #b91c1c;
+      --danger-button-hover: #991b1b;
       --radius: 14px;
     }
 
@@ -144,6 +146,49 @@
       margin-top: 18px;
       color: var(--muted);
       font-size: 0.92rem;
+    }
+
+    .danger-section {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    .danger-card {
+      margin-top: 12px;
+      padding: 14px;
+      border: 1px solid var(--danger-border);
+      border-radius: 12px;
+      background: #fff7f7;
+    }
+
+    .danger-title {
+      margin: 0 0 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--danger-text);
+    }
+
+    .danger-copy {
+      margin: 0 0 12px;
+      color: #7f1d1d;
+      font-size: 0.93rem;
+      line-height: 1.4;
+    }
+
+    .danger-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .danger-button {
+      background: var(--danger-button);
+    }
+
+    .danger-button:hover {
+      background: var(--danger-button-hover);
     }
 
     .selected-box {
@@ -299,6 +344,10 @@
       .remove-btn {
         width: 100%;
       }
+
+      .danger-row {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -377,6 +426,37 @@
 
       <div class="footer-note">
         CSV file: {{ csv_path }}
+      </div>
+
+      <div class="danger-section">
+        <div class="danger-card">
+          <p class="danger-title">Delete FTP Photos By Lot Number</p>
+          <p class="danger-copy">
+            Use this if a saved lot should no longer be included in the auction. This removes the remote FTP photos tied to that lot number from AuctionNinja.
+          </p>
+
+          <form action="{{ url_for('delete_remote_upload') }}" method="post">
+            <div class="danger-row">
+              <div class="field" style="margin-bottom:0;">
+                <label for="lot_number">Lot Number</label>
+                <input
+                  id="lot_number"
+                  type="text"
+                  name="lot_number"
+                  inputmode="numeric"
+                  placeholder="Example: 2056"
+                >
+              </div>
+              <button
+                type="submit"
+                class="danger-button"
+                onclick="return confirm('Delete the FTP photos tied to this lot number from AuctionNinja?');"
+              >
+                Delete FTP Photos
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   </div>

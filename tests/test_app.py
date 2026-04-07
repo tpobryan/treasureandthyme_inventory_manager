@@ -18,8 +18,10 @@ def test_env(tmp_path):
         "CSV_PATH": app_module.CSV_PATH,
         "LOT_STATE_PATH": app_module.LOT_STATE_PATH,
         "AUCTION_PHOTO_STATE_PATH": app_module.AUCTION_PHOTO_STATE_PATH,
+        "FTP_UPLOAD_STATE_PATH": app_module.FTP_UPLOAD_STATE_PATH,
         "LOT_LOCK_PATH": app_module.LOT_LOCK_PATH,
         "AUCTION_PHOTO_LOCK_PATH": app_module.AUCTION_PHOTO_LOCK_PATH,
+        "FTP_UPLOAD_STATE_LOCK_PATH": app_module.FTP_UPLOAD_STATE_LOCK_PATH,
     }
 
     app_module.DATA_DIR = data_dir
@@ -27,8 +29,10 @@ def test_env(tmp_path):
     app_module.CSV_PATH = data_dir / "auction_items.csv"
     app_module.LOT_STATE_PATH = data_dir / "lot_state.json"
     app_module.AUCTION_PHOTO_STATE_PATH = data_dir / "auction_photo_state.json"
+    app_module.FTP_UPLOAD_STATE_PATH = data_dir / "ftp_upload_state.json"
     app_module.LOT_LOCK_PATH = data_dir / "lot_state.lock"
     app_module.AUCTION_PHOTO_LOCK_PATH = data_dir / "auction_photo_state.lock"
+    app_module.FTP_UPLOAD_STATE_LOCK_PATH = data_dir / "ftp_upload_state.lock"
     app_module.app.config["TESTING"] = True
 
     yield {
@@ -138,3 +142,34 @@ def test_save_with_invalid_data_does_not_write_csv(test_env):
     assert b"Title is required before saving." in response.data
     assert not app_module.CSV_PATH.exists()
     assert draft_dir.exists()
+
+
+def test_record_and_delete_ftp_upload_record(test_env):
+    app_module.record_ftp_upload(
+        lot_number=2056,
+        auction_number="4",
+        auction_photo_index=5,
+        remote_names=["5_1.jpg", "5_2.jpg"],
+    )
+
+    record = app_module.get_ftp_upload_record(2056)
+
+    assert record is not None
+    assert record["auction_number"] == "4"
+    assert record["auction_photo_index"] == 5
+    assert record["remote_names"] == ["5_1.jpg", "5_2.jpg"]
+
+    app_module.delete_ftp_upload_record(2056)
+
+    assert app_module.get_ftp_upload_record(2056) is None
+
+
+def test_delete_remote_upload_without_record_flashes_message(test_env):
+    response = test_env["client"].post(
+        "/delete_remote_upload",
+        data={"lot_number": "2056"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"No saved FTP upload record was found for lot 2056." in response.data

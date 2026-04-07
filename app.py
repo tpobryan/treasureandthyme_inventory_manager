@@ -35,8 +35,10 @@ UPLOADS_DIR = DATA_DIR / "uploads"
 CSV_PATH = DATA_DIR / "auction_items.csv"
 LOT_STATE_PATH = DATA_DIR / "lot_state.json"
 AUCTION_PHOTO_STATE_PATH = DATA_DIR / "auction_photo_state.json"
+FTP_UPLOAD_STATE_PATH = DATA_DIR / "ftp_upload_state.json"
 LOT_LOCK_PATH = DATA_DIR / "lot_state.lock"
 AUCTION_PHOTO_LOCK_PATH = DATA_DIR / "auction_photo_state.lock"
+FTP_UPLOAD_STATE_LOCK_PATH = DATA_DIR / "ftp_upload_state.lock"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -348,6 +350,43 @@ def reserve_next_auction_photo_index(auction_number: str) -> int:
         return next_index
 
 
+def ensure_ftp_upload_state() -> None:
+    if not FTP_UPLOAD_STATE_PATH.exists():
+        FTP_UPLOAD_STATE_PATH.write_text("{}", encoding="utf-8")
+
+
+def get_ftp_upload_record(lot_number: int | str) -> dict[str, object] | None:
+    ensure_ftp_upload_state()
+    data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
+    record = data.get(str(lot_number))
+    return record if isinstance(record, dict) else None
+
+
+def record_ftp_upload(
+    lot_number: int,
+    auction_number: str,
+    auction_photo_index: int,
+    remote_names: list[str],
+) -> None:
+    with state_lock(FTP_UPLOAD_STATE_LOCK_PATH):
+        ensure_ftp_upload_state()
+        data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
+        data[str(lot_number)] = {
+            "auction_number": str(auction_number),
+            "auction_photo_index": int(auction_photo_index),
+            "remote_names": list(remote_names),
+        }
+        FTP_UPLOAD_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def delete_ftp_upload_record(lot_number: int | str) -> None:
+    with state_lock(FTP_UPLOAD_STATE_LOCK_PATH):
+        ensure_ftp_upload_state()
+        data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
+        data.pop(str(lot_number), None)
+        FTP_UPLOAD_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
 def connect_ftp():
     host = os.getenv("FTP_HOST", "").strip()
     username = os.getenv("FTP_USERNAME", "").strip()
@@ -415,6 +454,44 @@ def upload_lot_photos_to_auctionninja(
             pass
 
     return uploaded_names
+
+
+def delete_lot_photos_from_auctionninja(
+    auction_number: str,
+    remote_names: list[str],
+) -> tuple[list[str], list[str]]:
+    if not remote_names:
+        return [], []
+
+    deleted_names: list[str] = []
+    missing_names: list[str] = []
+    ftp = connect_ftp()
+
+    try:
+        ftp.cwd(str(auction_number))
+
+        for remote_name in remote_names:
+            try:
+                ftp.delete(remote_name)
+                deleted_names.append(remote_name)
+                app.logger.info("Deleted remote file %s/%s", auction_number, remote_name)
+            except error_perm as exc:
+                if str(exc).startswith("550"):
+                    missing_names.append(remote_name)
+                    app.logger.warning(
+                        "Remote file missing during delete: %s/%s",
+                        auction_number,
+                        remote_name,
+                    )
+                else:
+                    raise
+    finally:
+        try:
+            ftp.quit()
+        except Exception:
+            pass
+
+    return deleted_names, missing_names
 
 def load_saved_files_for_temp_id(temp_id: str) -> list[Path]:
     temp_dir = UPLOADS_DIR / temp_id
@@ -781,6 +858,12 @@ def save():
             flash(f"Lot saved locally, but FTP upload failed: {exc}")
 
     if uploaded_names:
+        record_ftp_upload(
+            lot_number=csv_lot_number,
+            auction_number=auction_number,
+            auction_photo_index=auction_photo_index,
+            remote_names=uploaded_names,
+        )
         flash(
             f"Saved lot {csv_lot_number}. Uploaded to auction {auction_number} as: "
             + ", ".join(uploaded_names)
@@ -802,6 +885,55 @@ def reset():
         shutil.rmtree(UPLOADS_DIR)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     flash("Temporary uploads cleared.")
+    return redirect(url_for("index"))
+
+
+@app.route("/delete_remote_upload", methods=["POST"])
+def delete_remote_upload():
+    lot_number = request.form.get("lot_number", "").strip()
+
+    if not lot_number.isdigit():
+        flash("Enter a valid lot number to delete FTP photos.")
+        return redirect(url_for("index"))
+
+    record = get_ftp_upload_record(lot_number)
+    if not record:
+        flash(f"No saved FTP upload record was found for lot {lot_number}.")
+        return redirect(url_for("index"))
+
+    auction_number = str(record.get("auction_number", "")).strip()
+    remote_names = record.get("remote_names", [])
+
+    if not auction_number or not isinstance(remote_names, list):
+        flash(f"FTP upload record for lot {lot_number} is incomplete.")
+        return redirect(url_for("index"))
+
+    try:
+        deleted_names, missing_names = delete_lot_photos_from_auctionninja(
+            auction_number=auction_number,
+            remote_names=[str(name) for name in remote_names],
+        )
+        delete_ftp_upload_record(lot_number)
+    except Exception as exc:
+        app.logger.exception("FTP delete failed for lot %s", lot_number)
+        flash(f"FTP delete failed for lot {lot_number}: {exc}")
+        return redirect(url_for("index"))
+
+    if deleted_names and missing_names:
+        flash(
+            f"Deleted FTP photos for lot {lot_number}: {', '.join(deleted_names)}. "
+            f"Already missing: {', '.join(missing_names)}."
+        )
+    elif deleted_names:
+        flash(f"Deleted FTP photos for lot {lot_number}: {', '.join(deleted_names)}.")
+    elif missing_names:
+        flash(
+            f"FTP photos for lot {lot_number} were already missing remotely: "
+            + ", ".join(missing_names)
+        )
+    else:
+        flash(f"No FTP photos were recorded for lot {lot_number}.")
+
     return redirect(url_for("index"))
 
 
