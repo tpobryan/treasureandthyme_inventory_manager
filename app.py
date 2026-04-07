@@ -1,10 +1,13 @@
 import csv
+import errno
 import json
 import logging
 import os
 import re
 import shutil
+import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -32,6 +35,8 @@ UPLOADS_DIR = DATA_DIR / "uploads"
 CSV_PATH = DATA_DIR / "auction_items.csv"
 LOT_STATE_PATH = DATA_DIR / "lot_state.json"
 AUCTION_PHOTO_STATE_PATH = DATA_DIR / "auction_photo_state.json"
+LOT_LOCK_PATH = DATA_DIR / "lot_state.lock"
+AUCTION_PHOTO_LOCK_PATH = DATA_DIR / "auction_photo_state.lock"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,6 +87,36 @@ DEFAULT_CATEGORIES = [
 ]
 MAX_IMAGE_DIMENSION = 1800
 JPEG_QUALITY = 85
+LOCK_TIMEOUT_SECONDS = 10
+LOCK_POLL_INTERVAL_SECONDS = 0.1
+
+
+@contextmanager
+def state_lock(lock_path: Path, timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
+    deadline = time.monotonic() + timeout_seconds
+    lock_fd = None
+
+    while True:
+        try:
+            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            break
+        except OSError as exc:
+            if exc.errno != errno.EEXIST:
+                raise
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Timed out waiting for lock: {lock_path.name}")
+            time.sleep(LOCK_POLL_INTERVAL_SECONDS)
+
+    try:
+        os.write(lock_fd, str(os.getpid()).encode("utf-8"))
+        yield
+    finally:
+        if lock_fd is not None:
+            os.close(lock_fd)
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
 
 def ensure_lot_state() -> None:
     if not LOT_STATE_PATH.exists():
@@ -99,12 +134,13 @@ def get_next_lot_preview() -> int:
 
 
 def reserve_next_lot() -> int:
-    ensure_lot_state()
-    data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-    next_lot = int(data.get("last_lot", 1999)) + 1
-    data["last_lot"] = next_lot
-    LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    return next_lot
+    with state_lock(LOT_LOCK_PATH):
+        ensure_lot_state()
+        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
+        next_lot = int(data.get("last_lot", 1999)) + 1
+        data["last_lot"] = next_lot
+        LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return next_lot
 
 
 def ensure_csv_exists() -> None:
@@ -236,13 +272,14 @@ def get_next_auction_photo_index(auction_number: str) -> int:
 
 
 def reserve_next_auction_photo_index(auction_number: str) -> int:
-    ensure_auction_photo_state()
-    data = json.loads(AUCTION_PHOTO_STATE_PATH.read_text(encoding="utf-8"))
-    current = int(data.get(str(auction_number), 0))
-    next_index = current + 1
-    data[str(auction_number)] = next_index
-    AUCTION_PHOTO_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    return next_index
+    with state_lock(AUCTION_PHOTO_LOCK_PATH):
+        ensure_auction_photo_state()
+        data = json.loads(AUCTION_PHOTO_STATE_PATH.read_text(encoding="utf-8"))
+        current = int(data.get(str(auction_number), 0))
+        next_index = current + 1
+        data[str(auction_number)] = next_index
+        AUCTION_PHOTO_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return next_index
 
 
 def connect_ftp():
