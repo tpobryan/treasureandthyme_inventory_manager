@@ -98,6 +98,12 @@ ipconfig getifaddr en1
 waitress-serve --host 0.0.0.0 --port 5000 app:app
 ```
 
+## Run tests
+
+```bash
+python3 -m pytest
+```
+
 ## Notes
 - The final lot number is assigned when you click **Save to CSV**.
 - The next lot preview is shown before save.

@@ -35,6 +35,7 @@
     }
 
     .card {
+      position: relative;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -208,6 +209,71 @@
       font-size: 0.95rem;
     }
 
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(246, 247, 251, 0.88);
+      border-radius: var(--radius);
+      z-index: 10;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-panel {
+      width: min(100%, 360px);
+      padding: 22px 20px;
+      border-radius: 16px;
+      border: 1px solid #c7d2fe;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 18px 38px rgba(37, 99, 235, 0.12);
+      text-align: center;
+    }
+
+    .loading-spinner {
+      width: 46px;
+      height: 46px;
+      margin: 0 auto 14px;
+      border-radius: 999px;
+      border: 4px solid #dbeafe;
+      border-top-color: var(--accent);
+      animation: spin 0.9s linear infinite;
+    }
+
+    .loading-title {
+      margin: 0 0 8px;
+      font-size: 1.08rem;
+      font-weight: 700;
+    }
+
+    .loading-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .is-loading button,
+    .is-loading textarea,
+    .is-loading input[type="file"] {
+      pointer-events: none;
+    }
+
+    .is-loading button {
+      opacity: 0.7;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     @media (max-width: 640px) {
       .wrap {
         padding: 12px;
@@ -247,6 +313,16 @@
     {% endwith %}
 
     <div class="card">
+      <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-hidden="true">
+        <div class="loading-panel">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <p class="loading-title">Analyzing your item</p>
+          <p class="loading-copy">
+            Processing photos, optimizing images, and generating listing options. This can take a little bit.
+          </p>
+        </div>
+      </div>
+
       <h1>AuctionNinja Listing Generator</h1>
       <p class="sub">
         Add photos from your library or take them one at a time, build up the photo set here, then analyze.
@@ -313,8 +389,30 @@
     const fileList = document.getElementById("fileList");
     const emptyNote = document.getElementById("emptyNote");
     const photoCount = document.getElementById("photoCount");
+    const analyzeButton = document.getElementById("analyzeButton");
+    const sellerNotesInput = document.getElementById("seller_notes");
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingTitle = document.querySelector(".loading-title");
+    const loadingCopy = document.querySelector(".loading-copy");
 
     let selectedFiles = [];
+    let isSubmitting = false;
+    let loadingStepTimer = null;
+
+    const loadingSteps = [
+      {
+        title: "Uploading your photos",
+        copy: "Sending the selected images and notes so the draft can be prepared."
+      },
+      {
+        title: "Analyzing the item",
+        copy: "Reviewing visible details, materials, marks, and condition clues."
+      },
+      {
+        title: "Building listing options",
+        copy: "Writing title, description, category, keywords, and condition notes."
+      }
+    ];
 
     function fileKey(file) {
       return [file.name, file.size, file.lastModified, file.type].join("|");
@@ -363,6 +461,29 @@
       photoInput.value = "";
     }
 
+    function setLoadingStep(index) {
+      const step = loadingSteps[index % loadingSteps.length];
+      loadingTitle.textContent = step.title;
+      loadingCopy.textContent = step.copy;
+    }
+
+    function startLoadingState() {
+      let stepIndex = 0;
+      setLoadingStep(stepIndex);
+      loadingStepTimer = window.setInterval(() => {
+        stepIndex += 1;
+        setLoadingStep(stepIndex);
+      }, 2200);
+    }
+
+    function stopLoadingState() {
+      if (loadingStepTimer !== null) {
+        window.clearInterval(loadingStepTimer);
+        loadingStepTimer = null;
+      }
+      setLoadingStep(0);
+    }
+
     photoInput.addEventListener("change", (event) => {
       if (event.target.files && event.target.files.length) {
         addFiles(event.target.files);
@@ -382,31 +503,63 @@
     analyzeForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
+      if (isSubmitting) {
+        return;
+      }
+
       if (!selectedFiles.length) {
         alert("Please add at least one photo.");
         return;
       }
+
+      isSubmitting = true;
+      analyzeForm.classList.add("is-loading");
+      loadingOverlay.classList.add("active");
+      loadingOverlay.setAttribute("aria-hidden", "false");
+      startLoadingState();
+      analyzeButton.textContent = "Analyzing...";
+      analyzeButton.disabled = true;
+      addMoreButton.disabled = true;
+      clearPhotosButton.disabled = true;
+      photoInput.disabled = true;
+      sellerNotesInput.disabled = true;
 
       const formData = new FormData();
       for (const file of selectedFiles) {
         formData.append("photos", file, file.name);
       }
 
-      const sellerNotes = document.getElementById("seller_notes").value || "";
+      const sellerNotes = sellerNotesInput.value || "";
       formData.append("seller_notes", sellerNotes);
 
-      const response = await fetch(analyzeForm.action, {
-        method: "POST",
-        body: formData
-      });
+      try {
+        const response = await fetch(analyzeForm.action, {
+          method: "POST",
+          body: formData
+        });
 
-      const html = await response.text();
-      document.open();
-      document.write(html);
-      document.close();
+        const html = await response.text();
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (error) {
+        isSubmitting = false;
+        analyzeForm.classList.remove("is-loading");
+        loadingOverlay.classList.remove("active");
+        loadingOverlay.setAttribute("aria-hidden", "true");
+        stopLoadingState();
+        analyzeButton.textContent = "Analyze";
+        analyzeButton.disabled = false;
+        addMoreButton.disabled = false;
+        clearPhotosButton.disabled = false;
+        photoInput.disabled = false;
+        sellerNotesInput.disabled = false;
+        alert("Analysis failed to start. Please try again.");
+      }
     });
 
     renderSelectedFiles();
+    setLoadingStep(0);
   </script>
 </body>
 </html>
