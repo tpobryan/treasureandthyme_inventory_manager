@@ -11,12 +11,15 @@ import app as app_module
 def test_env(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     uploads_dir = data_dir / "uploads"
+    exports_dir = data_dir / "exports"
     data_dir.mkdir(parents=True, exist_ok=True)
     uploads_dir.mkdir(parents=True, exist_ok=True)
+    exports_dir.mkdir(parents=True, exist_ok=True)
 
     original_paths = {
         "DATA_DIR": app_module.DATA_DIR,
         "UPLOADS_DIR": app_module.UPLOADS_DIR,
+        "EXPORTS_DIR": app_module.EXPORTS_DIR,
         "CSV_PATH": app_module.CSV_PATH,
         "LOT_STATE_PATH": app_module.LOT_STATE_PATH,
         "AUCTION_PHOTO_STATE_PATH": app_module.AUCTION_PHOTO_STATE_PATH,
@@ -30,6 +33,7 @@ def test_env(tmp_path, monkeypatch):
 
     app_module.DATA_DIR = data_dir
     app_module.UPLOADS_DIR = uploads_dir
+    app_module.EXPORTS_DIR = exports_dir
     app_module.CSV_PATH = data_dir / "auction_items.csv"
     app_module.LOT_STATE_PATH = data_dir / "lot_state.json"
     app_module.AUCTION_PHOTO_STATE_PATH = data_dir / "auction_photo_state.json"
@@ -51,6 +55,7 @@ def test_env(tmp_path, monkeypatch):
     yield {
         "client": app_module.app.test_client(),
         "uploads_dir": uploads_dir,
+        "exports_dir": exports_dir,
     }
 
     for name, value in original_paths.items():
@@ -334,6 +339,9 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
     text = response.data.decode("utf-8")
     assert "Lot Number,Lead,Description" in text
     assert "2005,Lamp,Brass lamp,Working" in text
+    export_files = list(test_env["exports_dir"].glob("auction_items_export_*.csv"))
+    assert len(export_files) == 1
+    assert "2005,Lamp,Brass lamp,Working" in export_files[0].read_text(encoding="utf-8")
 
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
@@ -415,6 +423,9 @@ def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
     text = export_response.data.decode("utf-8")
     assert "2006,Chair,Wood chair,Vintage wear" in text
     assert "2005,Lamp,Brass lamp,Working" not in text
+    batch_files = list(test_env["exports_dir"].glob("auction_items_batch_2006-2006_*.csv"))
+    assert len(batch_files) == 1
+    assert "2006,Chair,Wood chair,Vintage wear" in batch_files[0].read_text(encoding="utf-8")
 
     with sqlite3.connect(db_path) as connection:
         rows = connection.execute(

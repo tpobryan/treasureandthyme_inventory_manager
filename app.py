@@ -38,6 +38,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
+EXPORTS_DIR = DATA_DIR / "exports"
 CSV_PATH = DATA_DIR / "auction_items.csv"
 LOT_STATE_PATH = DATA_DIR / "lot_state.json"
 AUCTION_PHOTO_STATE_PATH = DATA_DIR / "auction_photo_state.json"
@@ -50,6 +51,7 @@ ACTIVE_DRAFT_STATE_LOCK_PATH = DATA_DIR / "active_draft.lock"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
@@ -1566,6 +1568,21 @@ def combine_item_notes(form: dict[str, str]) -> str:
     return form.get("Item Notes", "").strip()
 
 
+def build_csv_text(rows: list[list[str]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(CSV_HEADER)
+    writer.writerows(rows)
+    return output.getvalue()
+
+
+def archive_export_csv(filename: str, csv_text: str) -> Path:
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    archive_path = EXPORTS_DIR / filename
+    archive_path.write_text(csv_text, encoding="utf-8", newline="")
+    return archive_path
+
+
 @app.route("/", methods=["GET"])
 def index():
     active_draft = get_active_draft()
@@ -1589,18 +1606,15 @@ def export_csv():
     if not database_enabled() and CSV_PATH.exists():
         return send_file(CSV_PATH, as_attachment=True, download_name=CSV_PATH.name)
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(CSV_HEADER)
-    writer.writerows(rows)
-
     filename = f"auction_items_export_{time.strftime('%Y%m%d')}.csv"
+    csv_text = build_csv_text(rows)
+    archive_export_csv(filename, csv_text)
     mark_lots_as_published(
         lot_numbers=lot_numbers_from_rows(rows),
         export_batch_name=filename,
     )
     return Response(
-        output.getvalue(),
+        csv_text,
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -1752,17 +1766,15 @@ def export_selected_csv():
     last_lot = selected_lots[-1]
     filename = f"auction_items_batch_{first_lot}-{last_lot}_{time.strftime('%Y%m%d')}.csv"
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(CSV_HEADER)
-    writer.writerows(rows)
     mark_lots_as_published(
         lot_numbers=selected_lots,
         export_batch_name=filename,
     )
+    csv_text = build_csv_text(rows)
+    archive_export_csv(filename, csv_text)
 
     return Response(
-        output.getvalue(),
+        csv_text,
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
