@@ -236,7 +236,7 @@
     {% endwith %}
 
     <div class="topbar">
-      <a class="back-link" href="{{ url_for('manage_items') }}">← Back to manage items</a>
+      <a class="back-link" href="{{ url_for('manage_items', status=current_filter) }}">← Back to manage items</a>
       <div class="status-pill">{{ item['status'] }}</div>
     </div>
 
@@ -291,6 +291,7 @@
         <div class="card">
           <h2>Edit Listing Fields</h2>
           <form action="{{ url_for('update_saved_item', lot_number=item['lot_number']) }}" method="post">
+            <input type="hidden" name="current_filter" value="{{ current_filter }}">
             <div class="field">
               <label for="Title">Title</label>
               <textarea id="Title" name="Title" rows="3">{{ form['Title'] }}</textarea>
@@ -335,7 +336,7 @@
 
             <div class="button-row">
               <button type="submit">Save Changes</button>
-              <a class="button-link secondary" href="{{ url_for('manage_items') }}">Cancel</a>
+              <a class="button-link secondary" href="{{ url_for('manage_items', status=current_filter) }}">Cancel</a>
             </div>
           </form>
         </div>

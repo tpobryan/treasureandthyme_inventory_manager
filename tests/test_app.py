@@ -646,6 +646,8 @@ def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, 
     assert removed_response.status_code == 200
     assert b"Bowl" in removed_response.data
     assert b"Plate" not in removed_response.data
+    assert b"Ready (1)" in removed_response.data
+    assert b"Removed (1)" in removed_response.data
 
 
 def test_restore_removed_ready_item_returns_to_ready(test_env, tmp_path, monkeypatch):
@@ -677,10 +679,15 @@ def test_restore_removed_ready_item_returns_to_ready(test_env, tmp_path, monkeyp
     )
 
     test_env["client"].post("/items/2015/remove", follow_redirects=True)
-    restore_response = test_env["client"].post("/items/2015/restore", follow_redirects=True)
+    restore_response = test_env["client"].post(
+        "/items/2015/restore",
+        data={"current_filter": "removed"},
+        follow_redirects=True,
+    )
 
     assert restore_response.status_code == 200
     assert b"Restored lot 2015 to ready." in restore_response.data
+    assert b"No items matched this status filter." in restore_response.data
 
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
@@ -719,11 +726,16 @@ def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_pa
     )
 
     test_env["client"].post("/export_selected_csv", data={"lot_numbers": ["2016"]})
-    test_env["client"].post("/items/2016/remove", follow_redirects=True)
-    restore_response = test_env["client"].post("/items/2016/restore", follow_redirects=True)
+    test_env["client"].post("/items/2016/remove", data={"current_filter": "published"}, follow_redirects=True)
+    restore_response = test_env["client"].post(
+        "/items/2016/restore",
+        data={"current_filter": "removed"},
+        follow_redirects=True,
+    )
 
     assert restore_response.status_code == 200
     assert b"marked needs_update" in restore_response.data
+    assert b"No items matched this status filter." in restore_response.data
 
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(

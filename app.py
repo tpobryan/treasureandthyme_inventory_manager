@@ -747,6 +747,56 @@ def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
     return items
 
 
+def fetch_manage_item_counts() -> dict[str, int]:
+    if not database_enabled():
+        return {key: 0 for key in MANAGE_ITEM_FILTERS}
+
+    ensure_item_store_ready()
+    connection, _dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT status, COUNT(*) AS item_count
+            FROM auction_items
+            GROUP BY status
+            """
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    counts = {
+        ITEM_STATUS_READY: 0,
+        ITEM_STATUS_PUBLISHED: 0,
+        ITEM_STATUS_NEEDS_UPDATE: 0,
+        ITEM_STATUS_REMOVED: 0,
+    }
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            status = str(record["status"])
+            count = int(record["item_count"])
+        elif isinstance(record, dict):
+            status = str(record.get("status", ""))
+            count = int(record.get("item_count", 0))
+        else:
+            status = str(record[0])
+            count = int(record[1])
+        if status in counts:
+            counts[status] = count
+
+    return {
+        "active": counts[ITEM_STATUS_READY] + counts[ITEM_STATUS_PUBLISHED] + counts[ITEM_STATUS_NEEDS_UPDATE],
+        ITEM_STATUS_READY: counts[ITEM_STATUS_READY],
+        ITEM_STATUS_PUBLISHED: counts[ITEM_STATUS_PUBLISHED],
+        ITEM_STATUS_NEEDS_UPDATE: counts[ITEM_STATUS_NEEDS_UPDATE],
+        ITEM_STATUS_REMOVED: counts[ITEM_STATUS_REMOVED],
+        "all": sum(counts.values()),
+    }
+
+
 def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
     if not database_enabled():
         return None
@@ -1628,10 +1678,12 @@ def manage_items():
 
     current_filter = normalize_manage_filter(request.args.get("status", "active"))
     items = fetch_manage_items(current_filter)
+    filter_counts = fetch_manage_item_counts()
     return render_template(
         "manage_items.html",
         items=items,
         current_filter=current_filter,
+        filter_counts=filter_counts,
     )
 
 
@@ -1644,7 +1696,7 @@ def edit_saved_item(lot_number: int):
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") == ITEM_STATUS_REMOVED:
         flash(f"Lot {lot_number} was not found.")
-        return redirect(url_for("manage_items"))
+        return redirect(url_for("manage_items", status=normalize_manage_filter(request.args.get("status", "active"))))
 
     image_folder = item.get("image_folder", "")
     saved_files = load_saved_files_for_temp_id(image_folder)
@@ -1655,11 +1707,13 @@ def edit_saved_item(lot_number: int):
         categories=DEFAULT_CATEGORIES,
         image_files=[p.name for p in saved_files],
         image_url_prefix=f"/uploads/{image_folder}/" if image_folder else "",
+        current_filter=normalize_manage_filter(request.args.get("status", "active")),
     )
 
 
 @app.route("/items/<int:lot_number>/update", methods=["POST"])
 def update_saved_item(lot_number: int):
+    current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
     if not database_enabled():
         flash("Saved item editing is available when DATABASE_URL is configured.")
         return redirect(url_for("index"))
@@ -1667,7 +1721,7 @@ def update_saved_item(lot_number: int):
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") == ITEM_STATUS_REMOVED:
         flash(f"Lot {lot_number} was not found.")
-        return redirect(url_for("manage_items"))
+        return redirect(url_for("manage_items", status=current_filter))
 
     form = {
         "Title": request.form.get("Title", "").strip(),
@@ -1699,6 +1753,7 @@ def update_saved_item(lot_number: int):
             categories=DEFAULT_CATEGORIES,
             image_files=[p.name for p in saved_files],
             image_url_prefix=f"/uploads/{image_folder}/" if image_folder else "",
+            current_filter=current_filter,
         )
 
     new_status = update_saved_item_record(lot_number, form)
@@ -1706,11 +1761,12 @@ def update_saved_item(lot_number: int):
         flash(f"Updated lot {lot_number}. Status changed to needs_update so it can be re-exported.")
     else:
         flash(f"Updated lot {lot_number}.")
-    return redirect(url_for("manage_items"))
+    return redirect(url_for("manage_items", status=current_filter))
 
 
 @app.route("/items/<int:lot_number>/remove", methods=["POST"])
 def remove_saved_item(lot_number: int):
+    current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
     if not database_enabled():
         flash("Saved item management is available when DATABASE_URL is configured.")
         return redirect(url_for("index"))
@@ -1718,17 +1774,18 @@ def remove_saved_item(lot_number: int):
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") == ITEM_STATUS_REMOVED:
         flash(f"Lot {lot_number} was not found.")
-        return redirect(url_for("manage_items"))
+        return redirect(url_for("manage_items", status=current_filter))
 
     if mark_item_removed(lot_number):
         flash(f"Removed lot {lot_number} from future exports.")
     else:
         flash(f"Lot {lot_number} could not be removed.")
-    return redirect(url_for("manage_items"))
+    return redirect(url_for("manage_items", status=current_filter))
 
 
 @app.route("/items/<int:lot_number>/restore", methods=["POST"])
 def restore_saved_item(lot_number: int):
+    current_filter = normalize_manage_filter(request.form.get("current_filter", "removed"))
     if not database_enabled():
         flash("Saved item management is available when DATABASE_URL is configured.")
         return redirect(url_for("index"))
@@ -1740,11 +1797,12 @@ def restore_saved_item(lot_number: int):
         flash(f"Restored lot {lot_number} to ready.")
     else:
         flash(f"Lot {lot_number} could not be restored.")
-    return redirect(url_for("manage_items", status="removed"))
+    return redirect(url_for("manage_items", status=current_filter))
 
 
 @app.route("/export_selected_csv", methods=["POST"])
 def export_selected_csv():
+    current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
     selected_lots = sorted(
         {
             int(value)
@@ -1755,12 +1813,12 @@ def export_selected_csv():
 
     if not selected_lots:
         flash("Select at least one lot to export.")
-        return redirect(url_for("manage_items"))
+        return redirect(url_for("manage_items", status=current_filter))
 
     rows = fetch_export_rows_for_lots(selected_lots)
     if not rows:
         flash("The selected lots could not be exported.")
-        return redirect(url_for("manage_items"))
+        return redirect(url_for("manage_items", status=current_filter))
 
     first_lot = selected_lots[0]
     last_lot = selected_lots[-1]
