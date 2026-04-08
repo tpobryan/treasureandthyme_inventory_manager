@@ -1,23 +1,28 @@
 import csv
 import errno
+import io
 import json
 import logging
 import os
 import re
 import shutil
+import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlparse
 
 from dotenv import load_dotenv
 from flask import (
     Flask,
+    Response,
     flash,
     redirect,
     render_template,
     request,
+    send_file,
     send_from_directory,
     url_for,
 )
@@ -73,6 +78,7 @@ CSV_HEADER = [
     "Shipping Available",
     "Category",
 ]
+DEFAULT_STARTING_LOT = 1999
 
 DEFAULT_CATEGORIES = [
     "Jewelry",
@@ -283,15 +289,322 @@ def state_lock(lock_path: Path, timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
         except FileNotFoundError:
             pass
 
+
+def get_database_url() -> str:
+    return os.getenv("DATABASE_URL", "").strip()
+
+
+def database_enabled() -> bool:
+    return bool(get_database_url())
+
+
+def database_label() -> str:
+    database_url = get_database_url()
+    if not database_url:
+        return "Local CSV file"
+
+    scheme = urlparse(database_url).scheme.lower()
+    if scheme.startswith("mysql"):
+        return "MySQL database"
+    if scheme.startswith("sqlite"):
+        return "SQLite database"
+    return "Database"
+
+
+def connect_item_store():
+    database_url = get_database_url()
+    if not database_url:
+        return None, "csv"
+
+    parsed = urlparse(database_url)
+    scheme = parsed.scheme.lower()
+
+    if scheme.startswith("sqlite"):
+        db_path = unquote(parsed.path or "")
+        if not db_path:
+            raise ValueError("DATABASE_URL sqlite path is missing.")
+        connection = sqlite3.connect(db_path)
+        connection.row_factory = sqlite3.Row
+        return connection, "sqlite"
+
+    if scheme in {"mysql", "mysql+pymysql"}:
+        try:
+            import pymysql
+        except ImportError as exc:
+            raise RuntimeError(
+                "PyMySQL is required for MySQL storage. Install requirements.txt again."
+            ) from exc
+
+        query = parse_qs(parsed.query)
+        connection = pymysql.connect(
+            host=parsed.hostname or "127.0.0.1",
+            port=parsed.port or 3306,
+            user=unquote(parsed.username or ""),
+            password=unquote(parsed.password or ""),
+            database=(parsed.path or "").lstrip("/"),
+            charset=query.get("charset", ["utf8mb4"])[0],
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=False,
+        )
+        return connection, "mysql"
+
+    raise ValueError("DATABASE_URL must use sqlite:/// or mysql:// syntax.")
+
+
+def ensure_item_store_ready() -> None:
+    if not database_enabled():
+        return
+
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auction_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lot_number INTEGER NOT NULL UNIQUE,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    condition_notes TEXT NOT NULL,
+                    low_estimate TEXT NOT NULL,
+                    high_estimate TEXT NOT NULL,
+                    dimensions_length TEXT NOT NULL,
+                    dimensions_depth TEXT NOT NULL,
+                    dimensions_height TEXT NOT NULL,
+                    tags TEXT NOT NULL,
+                    reference_number TEXT NOT NULL,
+                    item_notes TEXT NOT NULL,
+                    consigner_number TEXT NOT NULL,
+                    shipping_available TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    image_folder TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auction_items (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    lot_number INT NOT NULL UNIQUE,
+                    title TEXT NOT NULL,
+                    description LONGTEXT NOT NULL,
+                    condition_notes TEXT NOT NULL,
+                    low_estimate VARCHAR(255) NOT NULL,
+                    high_estimate VARCHAR(255) NOT NULL,
+                    dimensions_length VARCHAR(255) NOT NULL,
+                    dimensions_depth VARCHAR(255) NOT NULL,
+                    dimensions_height VARCHAR(255) NOT NULL,
+                    tags TEXT NOT NULL,
+                    reference_number VARCHAR(255) NOT NULL,
+                    item_notes LONGTEXT NOT NULL,
+                    consigner_number VARCHAR(255) NOT NULL,
+                    shipping_available VARCHAR(32) NOT NULL,
+                    category VARCHAR(255) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'ready',
+                    image_folder VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+                """
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def fetch_last_lot_from_store() -> int:
+    if not database_enabled():
+        ensure_lot_state()
+        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
+        return int(data.get("last_lot", DEFAULT_STARTING_LOT))
+
+    ensure_item_store_ready()
+    connection, _dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT MAX(lot_number) AS max_lot FROM auction_items")
+        row = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if isinstance(row, sqlite3.Row):
+        max_lot = row["max_lot"]
+    elif isinstance(row, dict):
+        max_lot = row.get("max_lot")
+    else:
+        max_lot = row[0] if row else None
+
+    return int(max_lot or DEFAULT_STARTING_LOT)
+
+
+def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: str) -> dict[str, str]:
+    return {
+        "lot_number": str(lot_number),
+        "title": form["Title"],
+        "description": form["Description"],
+        "condition_notes": form["Condition Summary"],
+        "low_estimate": form["Low Estimate ($)"],
+        "high_estimate": form["High Estimate ($)"],
+        "dimensions_length": form["Dimensions - Length"],
+        "dimensions_depth": form["Dimensions - Depth"],
+        "dimensions_height": form["Dimensions - Height"],
+        "tags": form["Keywords"],
+        "reference_number": form["Reference #"],
+        "item_notes": combine_item_notes(form),
+        "consigner_number": form["Consigner #"],
+        "shipping_available": form["Shipping Available"],
+        "category": form["Category"],
+        "status": "ready",
+        "image_folder": image_folder,
+    }
+
+
+def append_item_record(record: dict[str, str]) -> None:
+    if not database_enabled():
+        row = [
+            record["lot_number"],
+            record["title"],
+            record["description"],
+            record["condition_notes"],
+            record["low_estimate"],
+            record["high_estimate"],
+            record["dimensions_length"],
+            record["dimensions_depth"],
+            record["dimensions_height"],
+            record["tags"],
+            record["reference_number"],
+            record["item_notes"],
+            record["consigner_number"],
+            record["shipping_available"],
+            record["category"],
+        ]
+        append_csv_row(row)
+        return
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * 17) if dialect == "sqlite" else ", ".join(["%s"] * 17)
+        cursor.execute(
+            f"""
+            INSERT INTO auction_items (
+                lot_number,
+                title,
+                description,
+                condition_notes,
+                low_estimate,
+                high_estimate,
+                dimensions_length,
+                dimensions_depth,
+                dimensions_height,
+                tags,
+                reference_number,
+                item_notes,
+                consigner_number,
+                shipping_available,
+                category,
+                status,
+                image_folder
+            ) VALUES ({placeholders})
+            """,
+            (
+                int(record["lot_number"]),
+                record["title"],
+                record["description"],
+                record["condition_notes"],
+                record["low_estimate"],
+                record["high_estimate"],
+                record["dimensions_length"],
+                record["dimensions_depth"],
+                record["dimensions_height"],
+                record["tags"],
+                record["reference_number"],
+                record["item_notes"],
+                record["consigner_number"],
+                record["shipping_available"],
+                record["category"],
+                record["status"],
+                record["image_folder"],
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def fetch_export_rows() -> list[list[str]]:
+    if not database_enabled():
+        ensure_csv_exists()
+        with CSV_PATH.open("r", newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        return rows[1:]
+
+    ensure_item_store_ready()
+    connection, _dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT
+                lot_number,
+                title,
+                description,
+                condition_notes,
+                low_estimate,
+                high_estimate,
+                dimensions_length,
+                dimensions_depth,
+                dimensions_height,
+                tags,
+                reference_number,
+                item_notes,
+                consigner_number,
+                shipping_available,
+                category
+            FROM auction_items
+            WHERE status != 'removed'
+            ORDER BY lot_number
+            """
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    rows: list[list[str]] = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            values = [record[key] for key in record.keys()]
+        elif isinstance(record, dict):
+            values = [record[key] for key in record.keys()]
+        else:
+            values = list(record)
+        rows.append(["" if value is None else str(value) for value in values])
+    return rows
+
 def ensure_lot_state() -> None:
     if not LOT_STATE_PATH.exists():
-        LOT_STATE_PATH.write_text(json.dumps({"last_lot": 1999}, indent=2), encoding="utf-8")
+        LOT_STATE_PATH.write_text(
+            json.dumps({"last_lot": DEFAULT_STARTING_LOT}, indent=2),
+            encoding="utf-8",
+        )
 
 
 def get_last_lot() -> int:
-    ensure_lot_state()
-    data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-    return int(data.get("last_lot", 1999))
+    return fetch_last_lot_from_store()
 
 
 def get_next_lot_preview() -> int:
@@ -300,9 +613,12 @@ def get_next_lot_preview() -> int:
 
 def reserve_next_lot() -> int:
     with state_lock(LOT_LOCK_PATH):
+        if database_enabled():
+            return fetch_last_lot_from_store() + 1
+
         ensure_lot_state()
         data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        next_lot = int(data.get("last_lot", 1999)) + 1
+        next_lot = int(data.get("last_lot", DEFAULT_STARTING_LOT)) + 1
         data["last_lot"] = next_lot
         LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
         return next_lot
@@ -729,6 +1045,31 @@ def index():
         next_lot=get_next_lot_preview(),
         csv_path=CSV_PATH.name,
         active_draft=active_draft,
+        database_enabled=database_enabled(),
+        storage_label=database_label(),
+    )
+
+
+@app.route("/export_csv", methods=["GET"])
+def export_csv():
+    rows = fetch_export_rows()
+    if not rows:
+        flash("There are no saved items to export yet.")
+        return redirect(url_for("index"))
+
+    if not database_enabled() and CSV_PATH.exists():
+        return send_file(CSV_PATH, as_attachment=True, download_name=CSV_PATH.name)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(CSV_HEADER)
+    writer.writerows(rows)
+
+    filename = f"auction_items_export_{time.strftime('%Y%m%d')}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -971,27 +1312,12 @@ def save():
         flash(f"Warning: saved listing but could not rename image folder: {exc}")
         final_dir = temp_dir
 
-    combined_item_notes = combine_item_notes(form)
-
-    row = [
-        str(csv_lot_number),
-        form["Title"],
-        form["Description"],
-        form["Condition Summary"],
-        form["Low Estimate ($)"],
-        form["High Estimate ($)"],
-        form["Dimensions - Length"],
-        form["Dimensions - Depth"],
-        form["Dimensions - Height"],
-        form["Keywords"],
-        form["Reference #"],
-        combined_item_notes,
-        form["Consigner #"],
-        form["Shipping Available"],
-        form["Category"],
-    ]
-
-    append_csv_row(row)
+    record = item_record_from_form(
+        lot_number=csv_lot_number,
+        form=form,
+        image_folder=final_dir.name,
+    )
+    append_item_record(record)
     clear_active_draft(temp_id=temp_id)
 
     auction_number = os.getenv("AUCTION_NUMBER", "").strip()
@@ -1022,7 +1348,14 @@ def save():
             + ", ".join(uploaded_names)
         )
     else:
-        flash(f"Saved lot {csv_lot_number}. Images stored in: {final_dir.name}")
+        if database_enabled():
+            flash(
+                f"Saved lot {csv_lot_number} to the database. "
+                f"Download the AuctionNinja CSV from the home page when ready. "
+                f"Images stored in: {final_dir.name}"
+            )
+        else:
+            flash(f"Saved lot {csv_lot_number}. Images stored in: {final_dir.name}")
 
     return redirect(url_for("index"))
 

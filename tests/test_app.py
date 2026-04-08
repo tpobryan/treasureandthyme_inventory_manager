@@ -1,3 +1,5 @@
+import os
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -6,7 +8,7 @@ import app as app_module
 
 
 @pytest.fixture
-def test_env(tmp_path):
+def test_env(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     uploads_dir = data_dir / "uploads"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -38,6 +40,13 @@ def test_env(tmp_path):
     app_module.FTP_UPLOAD_STATE_LOCK_PATH = data_dir / "ftp_upload_state.lock"
     app_module.ACTIVE_DRAFT_STATE_LOCK_PATH = data_dir / "active_draft.lock"
     app_module.app.config["TESTING"] = True
+    monkeypatch.setenv("DATABASE_URL", "")
+    monkeypatch.setenv("AUCTION_NUMBER", "")
+    monkeypatch.setenv("FTP_HOST", "")
+    monkeypatch.setenv("FTP_PORT", "21")
+    monkeypatch.setenv("FTP_USERNAME", "")
+    monkeypatch.setenv("FTP_PASSWORD", "")
+    monkeypatch.setenv("FTP_TLS", "false")
 
     yield {
         "client": app_module.app.test_client(),
@@ -216,3 +225,112 @@ def test_discard_draft_removes_folder_and_state(test_env):
     assert b"Discarded the last unsaved draft." in response.data
     assert not draft_dir.exists()
     assert app_module.get_active_draft() is None
+
+
+def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
+    draft_dir = test_env["uploads_dir"] / "draft123"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "photo.jpg").write_bytes(b"fake image")
+
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    response = test_env["client"].post(
+        "/save",
+        data={
+            "temp_id": "draft123",
+            "seller_notes": "From seller",
+            "option_1_identification": "Option one",
+            "option_1_confidence_note": "Likely",
+            "option_1_material_notes": "Ceramic",
+            "option_1_mark_notes": "Unmarked",
+            "option_1_title": "Draft title",
+            "option_1_description": "Draft description",
+            "option_1_category": "Decorative Arts",
+            "option_1_condition_summary": "Visible wear",
+            "option_1_keywords": "vase, ceramic",
+            "option_2_identification": "",
+            "option_2_confidence_note": "",
+            "option_2_material_notes": "",
+            "option_2_mark_notes": "",
+            "option_2_title": "",
+            "option_2_description": "",
+            "option_2_category": "",
+            "option_2_condition_summary": "",
+            "option_2_keywords": "",
+            "option_3_identification": "",
+            "option_3_confidence_note": "",
+            "option_3_material_notes": "",
+            "option_3_mark_notes": "",
+            "option_3_title": "",
+            "option_3_description": "",
+            "option_3_category": "",
+            "option_3_condition_summary": "",
+            "option_3_keywords": "",
+            "Identification": "Item",
+            "Confidence Note": "Likely item",
+            "Material Notes": "Ceramic",
+            "Mark Notes": "Unmarked",
+            "Title": "Blue Vase",
+            "Description": "Desc",
+            "Condition Summary": "Used",
+            "Keywords": "decor",
+            "Category": "Decorative Arts",
+            "Low Estimate ($)": "",
+            "High Estimate ($)": "",
+            "Dimensions - Length": "",
+            "Dimensions - Depth": "",
+            "Dimensions - Height": "",
+            "Reference #": "",
+            "Item Notes": "notes",
+            "Consigner #": "",
+            "Shipping Available": "No",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Saved lot 2000 to the database." in response.data
+    assert not app_module.CSV_PATH.exists()
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT lot_number, title, item_notes, shipping_available FROM auction_items"
+        ).fetchone()
+
+    assert row == (2000, "Blue Vase", "notes", "No")
+
+
+def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2005",
+            "title": "Lamp",
+            "description": "Brass lamp",
+            "condition_notes": "Working",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "lamp, brass",
+            "reference_number": "",
+            "item_notes": "tested",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2005_lamp",
+        }
+    )
+
+    response = test_env["client"].get("/export_csv")
+
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    text = response.data.decode("utf-8")
+    assert "Lot Number,Lead,Description" in text
+    assert "2005,Lamp,Brass lamp,Working" in text

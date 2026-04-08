@@ -492,11 +492,12 @@
 
         <div class="button-row">
           <button type="submit" id="analyzeButton">Analyze</button>
+          <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download AuctionNinja CSV</a>
         </div>
       </form>
 
       <div class="footer-note">
-        CSV file: {{ csv_path }}
+        Item storage: {{ storage_label }}{% if database_enabled %}. Export a fresh CSV when you are ready to import lots into AuctionNinja.{% else %}. CSV file: {{ csv_path }}{% endif %}
       </div>
 
       <div class="danger-section">
