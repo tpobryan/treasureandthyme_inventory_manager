@@ -635,3 +635,89 @@ def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, 
     assert removed_response.status_code == 200
     assert b"Bowl" in removed_response.data
     assert b"Plate" not in removed_response.data
+
+
+def test_restore_removed_ready_item_returns_to_ready(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2015",
+            "title": "Tray",
+            "description": "Metal tray",
+            "condition_notes": "Wear",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "tray",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2015_tray",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    test_env["client"].post("/items/2015/remove", follow_redirects=True)
+    restore_response = test_env["client"].post("/items/2015/restore", follow_redirects=True)
+
+    assert restore_response.status_code == 200
+    assert b"Restored lot 2015 to ready." in restore_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT status FROM auction_items WHERE lot_number = 2015"
+        ).fetchone()
+
+    assert row == ("ready",)
+
+
+def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2016",
+            "title": "Vase",
+            "description": "Ceramic vase",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "vase",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2016_vase",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    test_env["client"].post("/export_selected_csv", data={"lot_numbers": ["2016"]})
+    test_env["client"].post("/items/2016/remove", follow_redirects=True)
+    restore_response = test_env["client"].post("/items/2016/restore", follow_redirects=True)
+
+    assert restore_response.status_code == 200
+    assert b"marked needs_update" in restore_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT status, published_at FROM auction_items WHERE lot_number = 2016"
+        ).fetchone()
+
+    assert row[0] == "needs_update"
+    assert row[1] is not None

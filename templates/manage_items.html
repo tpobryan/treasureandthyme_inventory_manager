@@ -332,6 +332,15 @@
                           >
                             Remove
                           </button>
+                        {% else %}
+                          <button
+                            type="submit"
+                            class="secondary"
+                            formaction="{{ url_for('restore_saved_item', lot_number=item['lot_number']) }}"
+                            formmethod="post"
+                          >
+                            Restore
+                          </button>
                         {% endif %}
                       </div>
                     </td>

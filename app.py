@@ -1005,6 +1005,58 @@ def mark_item_removed(lot_number: int) -> bool:
         connection.close()
 
 
+def restored_status_for_item(item: dict[str, str]) -> str:
+    if item.get("published_at", "").strip():
+        return ITEM_STATUS_NEEDS_UPDATE
+    return ITEM_STATUS_READY
+
+
+def restore_removed_item(lot_number: int) -> str | None:
+    if not database_enabled():
+        return None
+
+    item = fetch_saved_item(lot_number)
+    if not item or item.get("status") != ITEM_STATUS_REMOVED:
+        return None
+
+    restored_status = restored_status_for_item(item)
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        status_placeholder = "?" if dialect == "sqlite" else "%s"
+        if dialect == "sqlite":
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = {status_placeholder},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number = {placeholder}
+                """,
+                (restored_status, lot_number),
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = {status_placeholder}
+                WHERE lot_number = {placeholder}
+                """,
+                (restored_status, lot_number),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+    return restored_status
+
+
 def fetch_export_rows_for_lots(lot_numbers: list[int]) -> list[list[str]]:
     if not lot_numbers:
         return []
@@ -1659,6 +1711,22 @@ def remove_saved_item(lot_number: int):
     else:
         flash(f"Lot {lot_number} could not be removed.")
     return redirect(url_for("manage_items"))
+
+
+@app.route("/items/<int:lot_number>/restore", methods=["POST"])
+def restore_saved_item(lot_number: int):
+    if not database_enabled():
+        flash("Saved item management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    restored_status = restore_removed_item(lot_number)
+    if restored_status == ITEM_STATUS_NEEDS_UPDATE:
+        flash(f"Restored lot {lot_number}. It is marked needs_update because it had already been published before removal.")
+    elif restored_status == ITEM_STATUS_READY:
+        flash(f"Restored lot {lot_number} to ready.")
+    else:
+        flash(f"Lot {lot_number} could not be restored.")
+    return redirect(url_for("manage_items", status="removed"))
 
 
 @app.route("/export_selected_csv", methods=["POST"])
