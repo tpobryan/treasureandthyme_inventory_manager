@@ -654,7 +654,10 @@
 
             <div class="field">
               <label for="Shipping Available">Shipping Available</label>
-              <input type="text" id="Shipping Available" name="Shipping Available" value="{{ form['Shipping Available'] }}" placeholder="Yes / No">
+              <select id="Shipping Available" name="Shipping Available">
+                <option value="Yes" {% if form['Shipping Available'] == 'Yes' %}selected{% endif %}>Yes</option>
+                <option value="No" {% if form['Shipping Available'] != 'Yes' %}selected{% endif %}>No</option>
+              </select>
             </div>
 
             <div class="button-row">
