@@ -616,20 +616,7 @@ def validate_save_form(form: dict[str, str]) -> list[str]:
 
 
 def combine_item_notes(form: dict[str, str]) -> str:
-    parts = []
-
-    material_notes = form.get("Material Notes", "").strip()
-    mark_notes = form.get("Mark Notes", "").strip()
-    item_notes = form.get("Item Notes", "").strip()
-
-    if material_notes:
-        parts.append(f"Material notes: {material_notes}")
-    if mark_notes:
-        parts.append(f"Mark notes: {mark_notes}")
-    if item_notes:
-        parts.append(item_notes)
-
-    return "\n".join(parts)
+    return form.get("Item Notes", "").strip()
 
 
 @app.route("/", methods=["GET"])
