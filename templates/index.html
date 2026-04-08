@@ -493,6 +493,9 @@
         <div class="button-row">
           <button type="submit" id="analyzeButton">Analyze</button>
           <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download AuctionNinja CSV</a>
+          {% if database_enabled %}
+            <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>
+          {% endif %}
         </div>
       </form>
 

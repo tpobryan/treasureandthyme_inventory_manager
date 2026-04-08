@@ -79,6 +79,11 @@ CSV_HEADER = [
     "Category",
 ]
 DEFAULT_STARTING_LOT = 1999
+ITEM_STATUS_READY = "ready"
+ITEM_STATUS_PUBLISHED = "published"
+ITEM_STATUS_NEEDS_UPDATE = "needs_update"
+ITEM_STATUS_REMOVED = "removed"
+EXPORTABLE_STATUSES = {ITEM_STATUS_READY, ITEM_STATUS_NEEDS_UPDATE, ITEM_STATUS_PUBLISHED}
 
 DEFAULT_CATEGORIES = [
     "Jewelry",
@@ -382,11 +387,15 @@ def ensure_item_store_ready() -> None:
                     category TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'ready',
                     image_folder TEXT NOT NULL,
+                    last_export_batch TEXT,
+                    published_at TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            _ensure_sqlite_column(cursor, "auction_items", "last_export_batch", "TEXT")
+            _ensure_sqlite_column(cursor, "auction_items", "published_at", "TEXT")
         else:
             cursor.execute(
                 """
@@ -409,14 +418,31 @@ def ensure_item_store_ready() -> None:
                     category VARCHAR(255) NOT NULL,
                     status VARCHAR(32) NOT NULL DEFAULT 'ready',
                     image_folder VARCHAR(255) NOT NULL,
+                    last_export_batch VARCHAR(255) NULL,
+                    published_at TIMESTAMP NULL DEFAULT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
                 """
             )
+            _ensure_mysql_column(cursor, "auction_items", "last_export_batch", "VARCHAR(255) NULL")
+            _ensure_mysql_column(cursor, "auction_items", "published_at", "TIMESTAMP NULL DEFAULT NULL")
         connection.commit()
     finally:
         connection.close()
+
+
+def _ensure_sqlite_column(cursor, table_name: str, column_name: str, definition: str) -> None:
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    columns = {row[1] for row in cursor.fetchall()}
+    if column_name not in columns:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+
+
+def _ensure_mysql_column(cursor, table_name: str, column_name: str, definition: str) -> None:
+    cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
+    if cursor.fetchone() is None:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
 
 
 def fetch_last_lot_from_store() -> int:
@@ -463,8 +489,10 @@ def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: s
         "consigner_number": form["Consigner #"],
         "shipping_available": form["Shipping Available"],
         "category": form["Category"],
-        "status": "ready",
+        "status": ITEM_STATUS_READY,
         "image_folder": image_folder,
+        "last_export_batch": "",
+        "published_at": "",
     }
 
 
@@ -544,6 +572,58 @@ def append_item_record(record: dict[str, str]) -> None:
         connection.close()
 
 
+def mark_lots_as_published(lot_numbers: list[int], export_batch_name: str) -> None:
+    if not lot_numbers or not database_enabled():
+        return
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
+        params: tuple[object, ...]
+        if dialect == "sqlite":
+            params = (
+                ITEM_STATUS_PUBLISHED,
+                export_batch_name,
+                *lot_numbers,
+            )
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = ?,
+                    last_export_batch = ?,
+                    published_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number IN ({placeholders})
+                """,
+                params,
+            )
+        else:
+            params = (
+                ITEM_STATUS_PUBLISHED,
+                export_batch_name,
+                *lot_numbers,
+            )
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = %s,
+                    last_export_batch = %s,
+                    published_at = CURRENT_TIMESTAMP
+                WHERE lot_number IN ({placeholders})
+                """,
+                params,
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def fetch_export_rows() -> list[list[str]]:
     if not database_enabled():
         ensure_csv_exists()
@@ -594,6 +674,378 @@ def fetch_export_rows() -> list[list[str]]:
             values = list(record)
         rows.append(["" if value is None else str(value) for value in values])
     return rows
+
+
+def fetch_manage_items() -> list[dict[str, str]]:
+    if not database_enabled():
+        return []
+
+    ensure_item_store_ready()
+    connection, _dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT
+                lot_number,
+                title,
+                category,
+                shipping_available,
+                status,
+                image_folder,
+                created_at,
+                updated_at,
+                published_at,
+                last_export_batch
+            FROM auction_items
+            WHERE status != 'removed'
+            ORDER BY lot_number
+            """
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    items: list[dict[str, str]] = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            item = {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+        elif isinstance(record, dict):
+            item = {key: "" if value is None else str(value) for key, value in record.items()}
+        else:
+            continue
+        items.append(item)
+    return items
+
+
+def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
+    if not database_enabled():
+        return None
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT
+                lot_number,
+                title,
+                description,
+                condition_notes,
+                low_estimate,
+                high_estimate,
+                dimensions_length,
+                dimensions_depth,
+                dimensions_height,
+                tags,
+                reference_number,
+                item_notes,
+                consigner_number,
+                shipping_available,
+                category,
+                status,
+                image_folder,
+                created_at,
+                updated_at,
+                published_at,
+                last_export_batch
+            FROM auction_items
+            WHERE lot_number = {placeholder}
+            """,
+            (lot_number,),
+        )
+        record = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if not record:
+        return None
+
+    if isinstance(record, sqlite3.Row):
+        return {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+    if isinstance(record, dict):
+        return {key: "" if value is None else str(value) for key, value in record.items()}
+    return None
+
+
+def form_from_saved_item(record: dict[str, str]) -> dict[str, str]:
+    return {
+        "Title": record.get("title", ""),
+        "Description": record.get("description", ""),
+        "Condition Summary": record.get("condition_notes", ""),
+        "Keywords": record.get("tags", ""),
+        "Category": record.get("category", "") or "Other",
+        "Low Estimate ($)": record.get("low_estimate", ""),
+        "High Estimate ($)": record.get("high_estimate", ""),
+        "Dimensions - Length": record.get("dimensions_length", ""),
+        "Dimensions - Depth": record.get("dimensions_depth", ""),
+        "Dimensions - Height": record.get("dimensions_height", ""),
+        "Reference #": record.get("reference_number", ""),
+        "Item Notes": record.get("item_notes", ""),
+        "Consigner #": record.get("consigner_number", ""),
+        "Shipping Available": record.get("shipping_available", "") or "No",
+    }
+
+
+def saved_item_fields_from_form(form: dict[str, str]) -> dict[str, str]:
+    return {
+        "title": form["Title"],
+        "description": form["Description"],
+        "condition_notes": form["Condition Summary"],
+        "low_estimate": form["Low Estimate ($)"],
+        "high_estimate": form["High Estimate ($)"],
+        "dimensions_length": form["Dimensions - Length"],
+        "dimensions_depth": form["Dimensions - Depth"],
+        "dimensions_height": form["Dimensions - Height"],
+        "tags": form["Keywords"],
+        "reference_number": form["Reference #"],
+        "item_notes": combine_item_notes(form),
+        "consigner_number": form["Consigner #"],
+        "shipping_available": form["Shipping Available"],
+        "category": form["Category"],
+    }
+
+
+def determine_updated_status(existing_record: dict[str, str], updated_fields: dict[str, str]) -> str:
+    current_status = existing_record.get("status", ITEM_STATUS_READY)
+    tracked_fields = [
+        "title",
+        "description",
+        "condition_notes",
+        "low_estimate",
+        "high_estimate",
+        "dimensions_length",
+        "dimensions_depth",
+        "dimensions_height",
+        "tags",
+        "reference_number",
+        "item_notes",
+        "consigner_number",
+        "shipping_available",
+        "category",
+    ]
+    changed = any((existing_record.get(field, "") or "") != updated_fields.get(field, "") for field in tracked_fields)
+
+    if current_status == ITEM_STATUS_PUBLISHED and changed:
+        return ITEM_STATUS_NEEDS_UPDATE
+    return current_status
+
+
+def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
+    existing_record = fetch_saved_item(lot_number)
+    if not existing_record:
+        raise ValueError(f"Lot {lot_number} was not found.")
+
+    updated_fields = saved_item_fields_from_form(form)
+    new_status = determine_updated_status(existing_record, updated_fields)
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                UPDATE auction_items
+                SET
+                    title = ?,
+                    description = ?,
+                    condition_notes = ?,
+                    low_estimate = ?,
+                    high_estimate = ?,
+                    dimensions_length = ?,
+                    dimensions_depth = ?,
+                    dimensions_height = ?,
+                    tags = ?,
+                    reference_number = ?,
+                    item_notes = ?,
+                    consigner_number = ?,
+                    shipping_available = ?,
+                    category = ?,
+                    status = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number = ?
+                """,
+                (
+                    updated_fields["title"],
+                    updated_fields["description"],
+                    updated_fields["condition_notes"],
+                    updated_fields["low_estimate"],
+                    updated_fields["high_estimate"],
+                    updated_fields["dimensions_length"],
+                    updated_fields["dimensions_depth"],
+                    updated_fields["dimensions_height"],
+                    updated_fields["tags"],
+                    updated_fields["reference_number"],
+                    updated_fields["item_notes"],
+                    updated_fields["consigner_number"],
+                    updated_fields["shipping_available"],
+                    updated_fields["category"],
+                    new_status,
+                    lot_number,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE auction_items
+                SET
+                    title = %s,
+                    description = %s,
+                    condition_notes = %s,
+                    low_estimate = %s,
+                    high_estimate = %s,
+                    dimensions_length = %s,
+                    dimensions_depth = %s,
+                    dimensions_height = %s,
+                    tags = %s,
+                    reference_number = %s,
+                    item_notes = %s,
+                    consigner_number = %s,
+                    shipping_available = %s,
+                    category = %s,
+                    status = %s
+                WHERE lot_number = %s
+                """,
+                (
+                    updated_fields["title"],
+                    updated_fields["description"],
+                    updated_fields["condition_notes"],
+                    updated_fields["low_estimate"],
+                    updated_fields["high_estimate"],
+                    updated_fields["dimensions_length"],
+                    updated_fields["dimensions_depth"],
+                    updated_fields["dimensions_height"],
+                    updated_fields["tags"],
+                    updated_fields["reference_number"],
+                    updated_fields["item_notes"],
+                    updated_fields["consigner_number"],
+                    updated_fields["shipping_available"],
+                    updated_fields["category"],
+                    new_status,
+                    lot_number,
+                ),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+    return new_status
+
+
+def mark_item_removed(lot_number: int) -> bool:
+    if not database_enabled():
+        return False
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        status_placeholder = "?" if dialect == "sqlite" else "%s"
+        if dialect == "sqlite":
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = {status_placeholder},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number = {placeholder}
+                """,
+                (ITEM_STATUS_REMOVED, lot_number),
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = {status_placeholder}
+                WHERE lot_number = {placeholder}
+                """,
+                (ITEM_STATUS_REMOVED, lot_number),
+            )
+        connection.commit()
+        return cursor.rowcount > 0
+    finally:
+        connection.close()
+
+
+def fetch_export_rows_for_lots(lot_numbers: list[int]) -> list[list[str]]:
+    if not lot_numbers:
+        return []
+
+    if not database_enabled():
+        ensure_csv_exists()
+        wanted = {str(lot_number) for lot_number in lot_numbers}
+        with CSV_PATH.open("r", newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            next(reader, None)
+            return [row for row in reader if row and row[0] in wanted]
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
+        cursor.execute(
+            f"""
+            SELECT
+                lot_number,
+                title,
+                description,
+                condition_notes,
+                low_estimate,
+                high_estimate,
+                dimensions_length,
+                dimensions_depth,
+                dimensions_height,
+                tags,
+                reference_number,
+                item_notes,
+                consigner_number,
+                shipping_available,
+                category
+            FROM auction_items
+            WHERE status != 'removed'
+              AND lot_number IN ({placeholders})
+            ORDER BY lot_number
+            """,
+            tuple(lot_numbers),
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    rows: list[list[str]] = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            values = [record[key] for key in record.keys()]
+        elif isinstance(record, dict):
+            values = [record[key] for key in record.keys()]
+        else:
+            values = list(record)
+        rows.append(["" if value is None else str(value) for value in values])
+    return rows
+
+
+def lot_numbers_from_rows(rows: list[list[str]]) -> list[int]:
+    lot_numbers: list[int] = []
+    for row in rows:
+        if row and str(row[0]).isdigit():
+            lot_numbers.append(int(row[0]))
+    return lot_numbers
 
 def ensure_lot_state() -> None:
     if not LOT_STATE_PATH.exists():
@@ -1066,6 +1518,154 @@ def export_csv():
     writer.writerows(rows)
 
     filename = f"auction_items_export_{time.strftime('%Y%m%d')}.csv"
+    mark_lots_as_published(
+        lot_numbers=lot_numbers_from_rows(rows),
+        export_batch_name=filename,
+    )
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.route("/manage_items", methods=["GET"])
+def manage_items():
+    if not database_enabled():
+        flash("Batch item management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    items = fetch_manage_items()
+    return render_template(
+        "manage_items.html",
+        items=items,
+    )
+
+
+@app.route("/items/<int:lot_number>/edit", methods=["GET"])
+def edit_saved_item(lot_number: int):
+    if not database_enabled():
+        flash("Saved item editing is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    item = fetch_saved_item(lot_number)
+    if not item or item.get("status") == ITEM_STATUS_REMOVED:
+        flash(f"Lot {lot_number} was not found.")
+        return redirect(url_for("manage_items"))
+
+    image_folder = item.get("image_folder", "")
+    saved_files = load_saved_files_for_temp_id(image_folder)
+    return render_template(
+        "saved_item_edit.html",
+        item=item,
+        form=form_from_saved_item(item),
+        categories=DEFAULT_CATEGORIES,
+        image_files=[p.name for p in saved_files],
+        image_url_prefix=f"/uploads/{image_folder}/" if image_folder else "",
+    )
+
+
+@app.route("/items/<int:lot_number>/update", methods=["POST"])
+def update_saved_item(lot_number: int):
+    if not database_enabled():
+        flash("Saved item editing is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    item = fetch_saved_item(lot_number)
+    if not item or item.get("status") == ITEM_STATUS_REMOVED:
+        flash(f"Lot {lot_number} was not found.")
+        return redirect(url_for("manage_items"))
+
+    form = {
+        "Title": request.form.get("Title", "").strip(),
+        "Description": request.form.get("Description", "").strip(),
+        "Condition Summary": request.form.get("Condition Summary", "").strip(),
+        "Keywords": request.form.get("Keywords", "").strip(),
+        "Category": request.form.get("Category", "").strip() or "Other",
+        "Low Estimate ($)": request.form.get("Low Estimate ($)", "").strip(),
+        "High Estimate ($)": request.form.get("High Estimate ($)", "").strip(),
+        "Dimensions - Length": request.form.get("Dimensions - Length", "").strip(),
+        "Dimensions - Depth": request.form.get("Dimensions - Depth", "").strip(),
+        "Dimensions - Height": request.form.get("Dimensions - Height", "").strip(),
+        "Reference #": request.form.get("Reference #", "").strip(),
+        "Item Notes": request.form.get("Item Notes", "").strip(),
+        "Consigner #": request.form.get("Consigner #", "").strip(),
+        "Shipping Available": request.form.get("Shipping Available", "").strip() or "No",
+    }
+
+    validation_errors = validate_save_form(form)
+    if validation_errors:
+        for error in validation_errors:
+            flash(error)
+        image_folder = item.get("image_folder", "")
+        saved_files = load_saved_files_for_temp_id(image_folder)
+        return render_template(
+            "saved_item_edit.html",
+            item=item,
+            form=form,
+            categories=DEFAULT_CATEGORIES,
+            image_files=[p.name for p in saved_files],
+            image_url_prefix=f"/uploads/{image_folder}/" if image_folder else "",
+        )
+
+    new_status = update_saved_item_record(lot_number, form)
+    if new_status == ITEM_STATUS_NEEDS_UPDATE:
+        flash(f"Updated lot {lot_number}. Status changed to needs_update so it can be re-exported.")
+    else:
+        flash(f"Updated lot {lot_number}.")
+    return redirect(url_for("manage_items"))
+
+
+@app.route("/items/<int:lot_number>/remove", methods=["POST"])
+def remove_saved_item(lot_number: int):
+    if not database_enabled():
+        flash("Saved item management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    item = fetch_saved_item(lot_number)
+    if not item or item.get("status") == ITEM_STATUS_REMOVED:
+        flash(f"Lot {lot_number} was not found.")
+        return redirect(url_for("manage_items"))
+
+    if mark_item_removed(lot_number):
+        flash(f"Removed lot {lot_number} from future exports.")
+    else:
+        flash(f"Lot {lot_number} could not be removed.")
+    return redirect(url_for("manage_items"))
+
+
+@app.route("/export_selected_csv", methods=["POST"])
+def export_selected_csv():
+    selected_lots = sorted(
+        {
+            int(value)
+            for value in request.form.getlist("lot_numbers")
+            if str(value).isdigit()
+        }
+    )
+
+    if not selected_lots:
+        flash("Select at least one lot to export.")
+        return redirect(url_for("manage_items"))
+
+    rows = fetch_export_rows_for_lots(selected_lots)
+    if not rows:
+        flash("The selected lots could not be exported.")
+        return redirect(url_for("manage_items"))
+
+    first_lot = selected_lots[0]
+    last_lot = selected_lots[-1]
+    filename = f"auction_items_batch_{first_lot}-{last_lot}_{time.strftime('%Y%m%d')}.csv"
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(CSV_HEADER)
+    writer.writerows(rows)
+    mark_lots_as_published(
+        lot_numbers=selected_lots,
+        export_batch_name=filename,
+    )
+
     return Response(
         output.getvalue(),
         mimetype="text/csv",

@@ -295,10 +295,10 @@ def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
 
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
-            "SELECT lot_number, title, item_notes, shipping_available FROM auction_items"
+            "SELECT lot_number, title, item_notes, shipping_available, status FROM auction_items"
         ).fetchone()
 
-    assert row == (2000, "Blue Vase", "notes", "No")
+    assert row == (2000, "Blue Vase", "notes", "No", "ready")
 
 
 def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
@@ -334,3 +334,240 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
     text = response.data.decode("utf-8")
     assert "Lot Number,Lead,Description" in text
     assert "2005,Lamp,Brass lamp,Working" in text
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT status, last_export_batch, published_at FROM auction_items WHERE lot_number = 2005"
+        ).fetchone()
+
+    assert row[0] == "published"
+    assert row[1].startswith("auction_items_export_")
+    assert row[2] is not None
+
+
+def test_manage_items_requires_database(test_env):
+    response = test_env["client"].get("/manage_items", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Batch item management is available when DATABASE_URL is configured." in response.data
+
+
+def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2005",
+            "title": "Lamp",
+            "description": "Brass lamp",
+            "condition_notes": "Working",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "lamp, brass",
+            "reference_number": "",
+            "item_notes": "tested",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2005_lamp",
+        }
+    )
+    app_module.append_item_record(
+        {
+            "lot_number": "2006",
+            "title": "Chair",
+            "description": "Wood chair",
+            "condition_notes": "Vintage wear",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "chair, wood",
+            "reference_number": "",
+            "item_notes": "solid",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Furniture",
+            "status": "ready",
+            "image_folder": "2006_chair",
+        }
+    )
+
+    manage_response = test_env["client"].get("/manage_items")
+    assert manage_response.status_code == 200
+    assert b"Manage Export Batches" in manage_response.data
+    assert b"Lamp" in manage_response.data
+    assert b"Chair" in manage_response.data
+
+    export_response = test_env["client"].post(
+        "/export_selected_csv",
+        data={"lot_numbers": ["2006"]},
+    )
+
+    assert export_response.status_code == 200
+    assert export_response.mimetype == "text/csv"
+    text = export_response.data.decode("utf-8")
+    assert "2006,Chair,Wood chair,Vintage wear" in text
+    assert "2005,Lamp,Brass lamp,Working" not in text
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT lot_number, status, last_export_batch FROM auction_items ORDER BY lot_number"
+        ).fetchall()
+
+    assert rows[0] == (2005, "ready", None)
+    assert rows[1][0] == 2006
+    assert rows[1][1] == "published"
+    assert rows[1][2].startswith("auction_items_batch_2006-2006_")
+
+
+def test_edit_saved_item_page_loads(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2010",
+            "title": "Mirror",
+            "description": "Wall mirror",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "mirror",
+            "reference_number": "",
+            "item_notes": "hallway",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2010_mirror",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    response = test_env["client"].get("/items/2010/edit")
+
+    assert response.status_code == 200
+    assert b"Edit Saved Lot 2010" in response.data
+    assert b"Wall mirror" in response.data
+
+
+def test_updating_published_item_marks_needs_update(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2011",
+            "title": "Lamp",
+            "description": "Brass lamp",
+            "condition_notes": "Working",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "lamp",
+            "reference_number": "",
+            "item_notes": "tested",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2011_lamp",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    test_env["client"].post("/export_selected_csv", data={"lot_numbers": ["2011"]})
+
+    update_response = test_env["client"].post(
+        "/items/2011/update",
+        data={
+            "Title": "Lamp",
+            "Description": "Brass lamp with updated details",
+            "Condition Summary": "Working",
+            "Keywords": "lamp",
+            "Category": "Decorative Arts",
+            "Low Estimate ($)": "",
+            "High Estimate ($)": "",
+            "Dimensions - Length": "",
+            "Dimensions - Depth": "",
+            "Dimensions - Height": "",
+            "Reference #": "",
+            "Item Notes": "tested",
+            "Consigner #": "",
+            "Shipping Available": "No",
+        },
+        follow_redirects=True,
+    )
+
+    assert update_response.status_code == 200
+    assert b"Status changed to needs_update" in update_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT description, status FROM auction_items WHERE lot_number = 2011"
+        ).fetchone()
+
+    assert row == ("Brass lamp with updated details", "needs_update")
+
+
+def test_remove_saved_item_hides_it_from_manage_and_export(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2012",
+            "title": "Clock",
+            "description": "Mantel clock",
+            "condition_notes": "Untested",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "clock",
+            "reference_number": "",
+            "item_notes": "heavy",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2012_clock",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    remove_response = test_env["client"].post(
+        "/items/2012/remove",
+        follow_redirects=True,
+    )
+
+    assert remove_response.status_code == 200
+    assert b"Removed lot 2012 from future exports." in remove_response.data
+    assert b"Clock" not in remove_response.data
+
+    export_response = test_env["client"].get("/export_csv", follow_redirects=True)
+    assert export_response.status_code == 200
+    assert b"There are no saved items to export yet." in export_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT status, title FROM auction_items WHERE lot_number = 2012"
+        ).fetchone()
+
+    assert row == ("removed", "Clock")

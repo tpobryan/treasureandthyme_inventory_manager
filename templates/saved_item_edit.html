@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edit Saved Item</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --border: #d9deea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .back-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .flash {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #f5c2c7;
+      background: #f8d7da;
+      color: #842029;
+      font-size: 0.96rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+      margin-bottom: 18px;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+    }
+
+    h2 {
+      font-size: 1.08rem;
+      margin-bottom: 12px;
+    }
+
+    .sub {
+      margin-top: 0;
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .thumb {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .thumb img {
+      display: block;
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background: #f3f4f6;
+    }
+
+    .thumb-name {
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      word-break: break-word;
+      border-top: 1px solid var(--border);
+    }
+
+    .meta-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta-item {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fafafa;
+    }
+
+    .meta-label {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .meta-value {
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 7px;
+    }
+
+    textarea,
+    select,
+    input[type="text"] {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font: inherit;
+      color: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 88px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+
+    button,
+    .button-link {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    button:hover,
+    .button-link:hover {
+      background: var(--accent-hover);
+    }
+
+    .secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .secondary:hover {
+      background: #d1d5db;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="flash">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="topbar">
+      <a class="back-link" href="{{ url_for('manage_items') }}">← Back to manage items</a>
+      <div class="status-pill">{{ item['status'] }}</div>
+    </div>
+
+    <div class="layout">
+      <div>
+        <div class="card">
+          <h1>Edit Saved Lot {{ item['lot_number'] }}</h1>
+          <p class="sub">Update the listing fields for this saved item. If a published item changes, it will move to <strong>needs_update</strong> so you can export it again.</p>
+
+          {% if image_files %}
+            <div class="thumb-grid">
+              {% for image_file in image_files %}
+                <div class="thumb">
+                  <img src="{{ image_url_prefix }}{{ image_file }}" alt="Saved item image">
+                  <div class="thumb-name">{{ image_file }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="sub">No saved photos were found for this lot.</p>
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h2>Item History</h2>
+          <div class="meta-list">
+            <div class="meta-item">
+              <div class="meta-label">Created</div>
+              <div class="meta-value">{{ item['created_at'] }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Last Updated</div>
+              <div class="meta-value">{{ item['updated_at'] or 'Not available' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Published</div>
+              <div class="meta-value">{{ item['published_at'] or 'Not published yet' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Last Export Batch</div>
+              <div class="meta-value">{{ item['last_export_batch'] or 'Not exported yet' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Photo Folder</div>
+              <div class="meta-value">{{ item['image_folder'] }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Edit Listing Fields</h2>
+          <form action="{{ url_for('update_saved_item', lot_number=item['lot_number']) }}" method="post">
+            <div class="field">
+              <label for="Title">Title</label>
+              <textarea id="Title" name="Title" rows="3">{{ form['Title'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Description">Description</label>
+              <textarea id="Description" name="Description" rows="4">{{ form['Description'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Condition Summary">Condition Summary</label>
+              <textarea id="Condition Summary" name="Condition Summary" rows="3">{{ form['Condition Summary'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Keywords">Keywords</label>
+              <textarea id="Keywords" name="Keywords" rows="3">{{ form['Keywords'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Category">Category</label>
+              <select id="Category" name="Category">
+                {% for category in categories %}
+                  <option value="{{ category }}" {% if form['Category'] == category %}selected{% endif %}>{{ category }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="Item Notes">Item Notes</label>
+              <textarea id="Item Notes" name="Item Notes" rows="4">{{ form['Item Notes'] }}</textarea>
+            </div>
+
+            <div class="field">
+              <label for="Shipping Available">Shipping Available</label>
+              <select id="Shipping Available" name="Shipping Available">
+                <option value="Yes" {% if form['Shipping Available'] == 'Yes' %}selected{% endif %}>Yes</option>
+                <option value="No" {% if form['Shipping Available'] != 'Yes' %}selected{% endif %}>No</option>
+              </select>
+            </div>
+
+            <div class="button-row">
+              <button type="submit">Save Changes</button>
+              <a class="button-link secondary" href="{{ url_for('manage_items') }}">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

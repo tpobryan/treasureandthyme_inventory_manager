@@ -117,6 +117,12 @@ python3 -m pytest
 - The final lot number is assigned when you click **Save Item**.
 - The next lot preview is shown before save.
 - When `DATABASE_URL` is configured, saved items and lot numbering come from the database instead of the CSV file.
+- Database-backed items use statuses:
+  - `ready` for newly saved items
+  - `published` after a full export or selected batch export
+  - `needs_update` reserved for saved-item edits after publish
+  - `removed` for lots you no longer want included in exports
+- Exporting a selected batch from the manage page automatically marks those lots as `published` and stores the export filename/date on each item.
 - Lot photo indexes, FTP upload tracking, active draft recovery, and temporary photo folders are still stored locally under `data/` in this first migration step.
 - If you run the app for multiple users at once, treat it as a small local tool rather than a concurrency-safe multi-user system.
 - The built-in Flask server is fine on a trusted home network, but Flask's docs recommend a production WSGI server such as Waitress for anything beyond development.
