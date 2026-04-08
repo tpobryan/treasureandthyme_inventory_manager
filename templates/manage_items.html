@@ -355,7 +355,10 @@
         {% endif %}
 
         <div class="footer-actions">
-          <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
+          <div class="inline-actions">
+            <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
+            <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
+          </div>
           <button type="submit">Download Selected CSV</button>
         </div>
       </form>

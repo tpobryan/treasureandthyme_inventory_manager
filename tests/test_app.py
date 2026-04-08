@@ -744,3 +744,21 @@ def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_pa
 
     assert row[0] == "needs_update"
     assert row[1] is not None
+
+
+def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    archived = test_env["exports_dir"] / "auction_items_batch_2000-2001_20260408.csv"
+    archived.write_text("Lot Number,Lead\n2000,Lamp\n", encoding="utf-8")
+
+    history_response = test_env["client"].get("/exports")
+    assert history_response.status_code == 200
+    assert b"Export History" in history_response.data
+    assert b"auction_items_batch_2000-2001_20260408.csv" in history_response.data
+
+    download_response = test_env["client"].get("/exports/auction_items_batch_2000-2001_20260408.csv")
+    assert download_response.status_code == 200
+    assert download_response.mimetype == "text/csv"
+    assert b"2000,Lamp" in download_response.data

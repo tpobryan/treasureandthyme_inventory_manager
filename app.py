@@ -1633,6 +1633,21 @@ def archive_export_csv(filename: str, csv_text: str) -> Path:
     return archive_path
 
 
+def list_export_archives() -> list[dict[str, str]]:
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    archives: list[dict[str, str]] = []
+    for path in sorted(EXPORTS_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
+        stat = path.stat()
+        archives.append(
+            {
+                "filename": path.name,
+                "size_bytes": str(stat.st_size),
+                "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
+            }
+        )
+    return archives
+
+
 @app.route("/", methods=["GET"])
 def index():
     active_draft = get_active_draft()
@@ -1685,6 +1700,28 @@ def manage_items():
         current_filter=current_filter,
         filter_counts=filter_counts,
     )
+
+
+@app.route("/exports", methods=["GET"])
+def export_history():
+    if not database_enabled():
+        flash("Export history is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    return render_template(
+        "export_history.html",
+        archives=list_export_archives(),
+    )
+
+
+@app.route("/exports/<path:filename>", methods=["GET"])
+def download_export_archive(filename: str):
+    safe_name = Path(filename).name
+    target = EXPORTS_DIR / safe_name
+    if not target.exists() or not target.is_file():
+        flash("That export file was not found.")
+        return redirect(url_for("export_history"))
+    return send_from_directory(EXPORTS_DIR, safe_name, as_attachment=True)
 
 
 @app.route("/items/<int:lot_number>/edit", methods=["GET"])
