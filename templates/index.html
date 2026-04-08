@@ -117,7 +117,8 @@
       margin-top: 20px;
     }
 
-    button {
+    button,
+    .button-link {
       appearance: none;
       border: 0;
       border-radius: 10px;
@@ -127,9 +128,12 @@
       cursor: pointer;
       background: var(--accent);
       color: white;
+      text-decoration: none;
+      display: inline-block;
     }
 
-    button:hover {
+    button:hover,
+    .button-link:hover {
       background: var(--accent-hover);
     }
 
@@ -145,6 +149,34 @@
     .footer-note {
       margin-top: 18px;
       color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .resume-card {
+      margin-bottom: 16px;
+      padding: 14px;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+
+    .resume-title {
+      margin: 0 0 6px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1d4ed8;
+    }
+
+    .resume-copy {
+      margin: 0 0 12px;
+      color: #334155;
+      font-size: 0.94rem;
+      line-height: 1.45;
+    }
+
+    .resume-meta {
+      margin: 0 0 12px;
+      color: #475569;
       font-size: 0.92rem;
     }
 
@@ -380,6 +412,27 @@
     {% endwith %}
 
     <div class="card">
+      {% if active_draft %}
+        <div class="resume-card">
+          <p class="resume-title">Resume Last Draft</p>
+          <p class="resume-copy">
+            You have an unsaved draft ready to continue. Resume it to keep working with the current photos and edits, or discard it and start fresh.
+          </p>
+          <p class="resume-meta">
+            Draft photos: {{ active_draft.image_count }}
+            {% if active_draft.seller_notes %}
+              | Seller notes saved
+            {% endif %}
+          </p>
+          <div class="button-row" style="margin-top: 0;">
+            <a class="button-link" href="{{ url_for('resume_draft') }}">Resume Last Draft</a>
+            <form action="{{ url_for('discard_draft') }}" method="post">
+              <button type="submit" class="secondary">Discard Draft</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
       <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-hidden="true">
         <div class="loading-panel">
           <div class="loading-spinner" aria-hidden="true"></div>

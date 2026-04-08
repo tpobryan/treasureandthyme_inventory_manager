@@ -19,9 +19,11 @@ def test_env(tmp_path):
         "LOT_STATE_PATH": app_module.LOT_STATE_PATH,
         "AUCTION_PHOTO_STATE_PATH": app_module.AUCTION_PHOTO_STATE_PATH,
         "FTP_UPLOAD_STATE_PATH": app_module.FTP_UPLOAD_STATE_PATH,
+        "ACTIVE_DRAFT_STATE_PATH": app_module.ACTIVE_DRAFT_STATE_PATH,
         "LOT_LOCK_PATH": app_module.LOT_LOCK_PATH,
         "AUCTION_PHOTO_LOCK_PATH": app_module.AUCTION_PHOTO_LOCK_PATH,
         "FTP_UPLOAD_STATE_LOCK_PATH": app_module.FTP_UPLOAD_STATE_LOCK_PATH,
+        "ACTIVE_DRAFT_STATE_LOCK_PATH": app_module.ACTIVE_DRAFT_STATE_LOCK_PATH,
     }
 
     app_module.DATA_DIR = data_dir
@@ -30,9 +32,11 @@ def test_env(tmp_path):
     app_module.LOT_STATE_PATH = data_dir / "lot_state.json"
     app_module.AUCTION_PHOTO_STATE_PATH = data_dir / "auction_photo_state.json"
     app_module.FTP_UPLOAD_STATE_PATH = data_dir / "ftp_upload_state.json"
+    app_module.ACTIVE_DRAFT_STATE_PATH = data_dir / "active_draft.json"
     app_module.LOT_LOCK_PATH = data_dir / "lot_state.lock"
     app_module.AUCTION_PHOTO_LOCK_PATH = data_dir / "auction_photo_state.lock"
     app_module.FTP_UPLOAD_STATE_LOCK_PATH = data_dir / "ftp_upload_state.lock"
+    app_module.ACTIVE_DRAFT_STATE_LOCK_PATH = data_dir / "active_draft.lock"
     app_module.app.config["TESTING"] = True
 
     yield {
@@ -173,3 +177,42 @@ def test_delete_remote_upload_without_record_flashes_message(test_env):
 
     assert response.status_code == 200
     assert b"No saved FTP upload record was found for lot 2056." in response.data
+
+
+def test_index_shows_resume_panel_for_active_draft(test_env):
+    draft_dir = test_env["uploads_dir"] / "draft123"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "photo.jpg").write_bytes(b"fake image")
+
+    app_module.set_active_draft(
+        temp_id="draft123",
+        seller_notes="Seller note",
+        options=[{"rank": 1, "title": "Draft title"}],
+        form={"Title": "Draft title"},
+    )
+
+    response = test_env["client"].get("/")
+
+    assert response.status_code == 200
+    assert b"Resume Last Draft" in response.data
+    assert b"Draft photos: 1" in response.data
+
+
+def test_discard_draft_removes_folder_and_state(test_env):
+    draft_dir = test_env["uploads_dir"] / "draft123"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "photo.jpg").write_bytes(b"fake image")
+
+    app_module.set_active_draft(
+        temp_id="draft123",
+        seller_notes="Seller note",
+        options=[{"rank": 1, "title": "Draft title"}],
+        form={"Title": "Draft title"},
+    )
+
+    response = test_env["client"].post("/discard_draft", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Discarded the last unsaved draft." in response.data
+    assert not draft_dir.exists()
+    assert app_module.get_active_draft() is None

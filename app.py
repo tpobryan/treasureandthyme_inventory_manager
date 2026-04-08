@@ -9,6 +9,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from flask import (
@@ -36,9 +37,11 @@ CSV_PATH = DATA_DIR / "auction_items.csv"
 LOT_STATE_PATH = DATA_DIR / "lot_state.json"
 AUCTION_PHOTO_STATE_PATH = DATA_DIR / "auction_photo_state.json"
 FTP_UPLOAD_STATE_PATH = DATA_DIR / "ftp_upload_state.json"
+ACTIVE_DRAFT_STATE_PATH = DATA_DIR / "active_draft.json"
 LOT_LOCK_PATH = DATA_DIR / "lot_state.lock"
 AUCTION_PHOTO_LOCK_PATH = DATA_DIR / "auction_photo_state.lock"
 FTP_UPLOAD_STATE_LOCK_PATH = DATA_DIR / "ftp_upload_state.lock"
+ACTIVE_DRAFT_STATE_LOCK_PATH = DATA_DIR / "active_draft.lock"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -101,6 +104,13 @@ def render_edit_page(
     form: dict[str, str],
     revision_request: str = "",
 ):
+    set_active_draft(
+        temp_id=temp_id,
+        seller_notes=seller_notes,
+        options=options,
+        form=form,
+        revision_request=revision_request,
+    )
     return render_template(
         "edit.html",
         temp_id=temp_id,
@@ -113,6 +123,83 @@ def render_edit_page(
         options=options,
         form=form,
     )
+
+
+def ensure_active_draft_state() -> None:
+    if not ACTIVE_DRAFT_STATE_PATH.exists():
+        ACTIVE_DRAFT_STATE_PATH.write_text("{}", encoding="utf-8")
+
+
+def set_active_draft(
+    temp_id: str,
+    seller_notes: str,
+    options: list[dict],
+    form: dict[str, str],
+    revision_request: str = "",
+) -> None:
+    with state_lock(ACTIVE_DRAFT_STATE_LOCK_PATH):
+        ensure_active_draft_state()
+        payload = {
+            "temp_id": temp_id,
+            "seller_notes": seller_notes,
+            "options": options,
+            "form": form,
+            "revision_request": revision_request,
+        }
+        ACTIVE_DRAFT_STATE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def clear_active_draft(temp_id: str | None = None) -> None:
+    with state_lock(ACTIVE_DRAFT_STATE_LOCK_PATH):
+        ensure_active_draft_state()
+        try:
+            current = json.loads(ACTIVE_DRAFT_STATE_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            current = {}
+
+        if temp_id and str(current.get("temp_id", "")).strip() != temp_id:
+            return
+
+        ACTIVE_DRAFT_STATE_PATH.write_text("{}", encoding="utf-8")
+
+
+def get_active_draft() -> dict[str, Any] | None:
+    ensure_active_draft_state()
+    try:
+        data = json.loads(ACTIVE_DRAFT_STATE_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        clear_active_draft()
+        return None
+
+    if not isinstance(data, dict):
+        clear_active_draft()
+        return None
+
+    temp_id = str(data.get("temp_id", "")).strip()
+    if not temp_id:
+        return None
+
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    if not saved_files:
+        clear_active_draft(temp_id=temp_id)
+        return None
+
+    options = data.get("options", [])
+    form = data.get("form", {})
+
+    if not isinstance(options, list) or not isinstance(form, dict):
+        clear_active_draft(temp_id=temp_id)
+        return None
+
+    return {
+        "temp_id": temp_id,
+        "seller_notes": str(data.get("seller_notes", "")).strip(),
+        "options": options,
+        "form": form,
+        "revision_request": str(data.get("revision_request", "")).strip(),
+        "image_files": [p.name for p in saved_files],
+        "image_count": len(saved_files),
+    }
 
 
 def current_edit_context(
@@ -636,10 +723,12 @@ def combine_item_notes(form: dict[str, str]) -> str:
 
 @app.route("/", methods=["GET"])
 def index():
+    active_draft = get_active_draft()
     return render_template(
         "index.html",
         next_lot=get_next_lot_preview(),
         csv_path=CSV_PATH.name,
+        active_draft=active_draft,
     )
 
 
@@ -903,6 +992,7 @@ def save():
     ]
 
     append_csv_row(row)
+    clear_active_draft(temp_id=temp_id)
 
     auction_number = os.getenv("AUCTION_NUMBER", "").strip()
     uploaded_names = []
@@ -947,7 +1037,43 @@ def reset():
     if UPLOADS_DIR.exists():
         shutil.rmtree(UPLOADS_DIR)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    clear_active_draft()
     flash("Temporary uploads cleared.")
+    return redirect(url_for("index"))
+
+
+@app.route("/resume_draft", methods=["GET"])
+def resume_draft():
+    active_draft = get_active_draft()
+    if not active_draft:
+        flash("No resumable draft was found.")
+        return redirect(url_for("index"))
+
+    temp_id = str(active_draft["temp_id"])
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    return render_edit_page(
+        temp_id=temp_id,
+        saved_files=saved_files,
+        seller_notes=str(active_draft["seller_notes"]),
+        options=active_draft["options"],
+        form=active_draft["form"],
+        revision_request=str(active_draft["revision_request"]),
+    )
+
+
+@app.route("/discard_draft", methods=["POST"])
+def discard_draft():
+    active_draft = get_active_draft()
+    if not active_draft:
+        flash("No resumable draft was found.")
+        return redirect(url_for("index"))
+
+    temp_id = str(active_draft["temp_id"])
+    temp_dir = UPLOADS_DIR / temp_id
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    clear_active_draft(temp_id=temp_id)
+    flash("Discarded the last unsaved draft.")
     return redirect(url_for("index"))
 
 
