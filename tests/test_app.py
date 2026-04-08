@@ -571,3 +571,67 @@ def test_remove_saved_item_hides_it_from_manage_and_export(test_env, tmp_path, m
         ).fetchone()
 
     assert row == ("removed", "Clock")
+
+
+def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2013",
+            "title": "Plate",
+            "description": "Blue plate",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "plate",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Pottery & Glass",
+            "status": "ready",
+            "image_folder": "2013_plate",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+    app_module.append_item_record(
+        {
+            "lot_number": "2014",
+            "title": "Bowl",
+            "description": "Stoneware bowl",
+            "condition_notes": "Used",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "bowl",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Pottery & Glass",
+            "status": "ready",
+            "image_folder": "2014_bowl",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    test_env["client"].post("/items/2014/remove", follow_redirects=True)
+
+    ready_response = test_env["client"].get("/manage_items?status=ready")
+    assert ready_response.status_code == 200
+    assert b"Plate" in ready_response.data
+    assert b"Bowl" not in ready_response.data
+
+    removed_response = test_env["client"].get("/manage_items?status=removed")
+    assert removed_response.status_code == 200
+    assert b"Bowl" in removed_response.data
+    assert b"Plate" not in removed_response.data

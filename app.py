@@ -84,6 +84,19 @@ ITEM_STATUS_PUBLISHED = "published"
 ITEM_STATUS_NEEDS_UPDATE = "needs_update"
 ITEM_STATUS_REMOVED = "removed"
 EXPORTABLE_STATUSES = {ITEM_STATUS_READY, ITEM_STATUS_NEEDS_UPDATE, ITEM_STATUS_PUBLISHED}
+MANAGE_ITEM_FILTERS = {
+    "active": {ITEM_STATUS_READY, ITEM_STATUS_PUBLISHED, ITEM_STATUS_NEEDS_UPDATE},
+    ITEM_STATUS_READY: {ITEM_STATUS_READY},
+    ITEM_STATUS_PUBLISHED: {ITEM_STATUS_PUBLISHED},
+    ITEM_STATUS_NEEDS_UPDATE: {ITEM_STATUS_NEEDS_UPDATE},
+    ITEM_STATUS_REMOVED: {ITEM_STATUS_REMOVED},
+    "all": {
+        ITEM_STATUS_READY,
+        ITEM_STATUS_PUBLISHED,
+        ITEM_STATUS_NEEDS_UPDATE,
+        ITEM_STATUS_REMOVED,
+    },
+}
 
 DEFAULT_CATEGORIES = [
     "Jewelry",
@@ -676,18 +689,29 @@ def fetch_export_rows() -> list[list[str]]:
     return rows
 
 
-def fetch_manage_items() -> list[dict[str, str]]:
+def normalize_manage_filter(raw_filter: str) -> str:
+    value = (raw_filter or "").strip().lower()
+    if value in MANAGE_ITEM_FILTERS:
+        return value
+    return "active"
+
+
+def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
     if not database_enabled():
         return []
 
+    normalized_filter = normalize_manage_filter(status_filter)
+    statuses = MANAGE_ITEM_FILTERS[normalized_filter]
+
     ensure_item_store_ready()
-    connection, _dialect = connect_item_store()
+    connection, dialect = connect_item_store()
     assert connection is not None
 
     try:
         cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(statuses)) if dialect == "sqlite" else ", ".join(["%s"] * len(statuses))
         cursor.execute(
-            """
+            f"""
             SELECT
                 lot_number,
                 title,
@@ -700,9 +724,10 @@ def fetch_manage_items() -> list[dict[str, str]]:
                 published_at,
                 last_export_batch
             FROM auction_items
-            WHERE status != 'removed'
+            WHERE status IN ({placeholders})
             ORDER BY lot_number
-            """
+            """,
+            tuple(statuses),
         )
         records = cursor.fetchall()
     finally:
@@ -1535,10 +1560,12 @@ def manage_items():
         flash("Batch item management is available when DATABASE_URL is configured.")
         return redirect(url_for("index"))
 
-    items = fetch_manage_items()
+    current_filter = normalize_manage_filter(request.args.get("status", "active"))
+    items = fetch_manage_items(current_filter)
     return render_template(
         "manage_items.html",
         items=items,
+        current_filter=current_filter,
     )
 
 
