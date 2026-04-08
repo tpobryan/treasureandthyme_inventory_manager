@@ -229,6 +229,24 @@
       font-size: 0.95rem;
     }
 
+    .file-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .file-thumb {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: #f3f4f6;
+    }
+
     .file-name {
       word-break: break-word;
       flex: 1;
@@ -476,6 +494,7 @@
     const loadingCopy = document.querySelector(".loading-copy");
 
     let selectedFiles = [];
+    const previewUrls = new Map();
     let isSubmitting = false;
     let loadingStepTimer = null;
 
@@ -498,6 +517,30 @@
       return [file.name, file.size, file.lastModified, file.type].join("|");
     }
 
+    function getPreviewUrl(file) {
+      const key = fileKey(file);
+      if (!previewUrls.has(key)) {
+        previewUrls.set(key, URL.createObjectURL(file));
+      }
+      return previewUrls.get(key);
+    }
+
+    function releasePreviewUrl(file) {
+      const key = fileKey(file);
+      const previewUrl = previewUrls.get(key);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        previewUrls.delete(key);
+      }
+    }
+
+    function releaseAllPreviewUrls() {
+      for (const previewUrl of previewUrls.values()) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      previewUrls.clear();
+    }
+
     function renderSelectedFiles() {
       fileList.innerHTML = "";
       photoCount.textContent = String(selectedFiles.length);
@@ -506,6 +549,14 @@
       selectedFiles.forEach((file, index) => {
         const row = document.createElement("div");
         row.className = "file-item";
+
+        const main = document.createElement("div");
+        main.className = "file-main";
+
+        const thumb = document.createElement("img");
+        thumb.className = "file-thumb";
+        thumb.src = getPreviewUrl(file);
+        thumb.alt = `Selected photo ${index + 1}`;
 
         const name = document.createElement("div");
         name.className = "file-name";
@@ -516,11 +567,14 @@
         remove.className = "remove-btn";
         remove.textContent = "Remove";
         remove.addEventListener("click", () => {
+          releasePreviewUrl(file);
           selectedFiles.splice(index, 1);
           renderSelectedFiles();
         });
 
-        row.appendChild(name);
+        main.appendChild(thumb);
+        main.appendChild(name);
+        row.appendChild(main);
         row.appendChild(remove);
         fileList.appendChild(row);
       });
@@ -575,6 +629,7 @@
     });
 
     clearPhotosButton.addEventListener("click", () => {
+      releaseAllPreviewUrls();
       selectedFiles = [];
       photoInput.value = "";
       renderSelectedFiles();

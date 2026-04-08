@@ -115,6 +115,16 @@ def render_edit_page(
     )
 
 
+def current_edit_context(
+    temp_id: str,
+    seller_notes: str,
+) -> tuple[list[Path], list[dict], dict[str, str]]:
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    options = options_from_request()
+    form = form_from_request(seller_notes=seller_notes)
+    return saved_files, options, form
+
+
 def _read_lock_pid(lock_path: Path) -> int | None:
     try:
         raw = lock_path.read_text(encoding="utf-8").strip()
@@ -279,6 +289,11 @@ def save_uploaded_files(uploaded_files) -> tuple[str, list[Path]]:
     temp_dir = UPLOADS_DIR / temp_id
     temp_dir.mkdir(parents=True, exist_ok=True)
 
+    saved_files = save_uploaded_files_to_dir(uploaded_files, temp_dir)
+    return temp_id, saved_files
+
+
+def save_uploaded_files_to_dir(uploaded_files, temp_dir: Path) -> list[Path]:
     saved_files: list[Path] = []
 
     for uploaded in uploaded_files:
@@ -325,7 +340,7 @@ def save_uploaded_files(uploaded_files) -> tuple[str, list[Path]]:
             # fallback: keep original if optimization fails
             saved_files.append(raw_destination)
 
-    return temp_id, saved_files
+    return saved_files
 
 def ensure_auction_photo_state() -> None:
     if not AUCTION_PHOTO_STATE_PATH.exists():
@@ -701,6 +716,67 @@ def choose_option():
             "Shipping Available",
         ]:
             form[key] = current_form.get(key, "")
+
+    return render_edit_page(
+        temp_id=temp_id,
+        saved_files=saved_files,
+        seller_notes=seller_notes,
+        options=options,
+        form=form,
+    )
+
+
+@app.route("/add_draft_photos", methods=["POST"])
+def add_draft_photos():
+    temp_id = request.form.get("temp_id", "").strip()
+    seller_notes = request.form.get("seller_notes", "").strip()
+    saved_files, options, form = current_edit_context(temp_id, seller_notes)
+
+    temp_dir = UPLOADS_DIR / temp_id
+    if not temp_id or not temp_dir.exists():
+        flash("Could not find uploaded images for this draft.")
+        return redirect(url_for("index"))
+
+    uploaded_files = request.files.getlist("photos")
+    added_files = save_uploaded_files_to_dir(uploaded_files, temp_dir)
+
+    if added_files:
+        flash(f"Added {len(added_files)} photo(s) to this draft.")
+    else:
+        flash("No new valid photos were added to this draft.")
+
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    return render_edit_page(
+        temp_id=temp_id,
+        saved_files=saved_files,
+        seller_notes=seller_notes,
+        options=options,
+        form=form,
+    )
+
+
+@app.route("/remove_draft_photo", methods=["POST"])
+def remove_draft_photo():
+    temp_id = request.form.get("temp_id", "").strip()
+    seller_notes = request.form.get("seller_notes", "").strip()
+    filename = secure_filename(request.form.get("filename", "").strip())
+    saved_files, options, form = current_edit_context(temp_id, seller_notes)
+
+    temp_dir = UPLOADS_DIR / temp_id
+    if not temp_id or not temp_dir.exists():
+        flash("Could not find uploaded images for this draft.")
+        return redirect(url_for("index"))
+
+    target = temp_dir / filename
+    if not filename or not target.exists() or not target.is_file():
+        flash("Could not find that photo in this draft.")
+    else:
+        target.unlink()
+        flash(f"Removed photo: {filename}")
+
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    if not saved_files:
+        flash("This draft has no photos left. Please add at least one photo before revising or saving.")
 
     return render_edit_page(
         temp_id=temp_id,

@@ -136,6 +136,44 @@
       border-top: 1px solid var(--border);
     }
 
+    .thumb-actions {
+      padding: 10px;
+      border-top: 1px solid var(--border);
+      background: #fff;
+    }
+
+    .small-secondary-button {
+      width: 100%;
+      padding: 10px 12px;
+      background: #e5e7eb;
+      color: #111827;
+      font-size: 0.92rem;
+    }
+
+    .small-secondary-button:hover {
+      background: #d1d5db;
+    }
+
+    .photo-tools {
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fafafa;
+    }
+
+    .photo-tools-title {
+      margin: 0 0 6px;
+      font-weight: 700;
+    }
+
+    .photo-tools-copy {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 0.93rem;
+      line-height: 1.4;
+    }
+
     .info-box {
       margin-top: 14px;
       padding: 12px;
@@ -397,11 +435,107 @@
           <h1>Review Photos</h1>
           <p class="sub">Compare the AI listing options, choose the best fit, then edit and save.</p>
 
+          <div class="photo-tools">
+            <p class="photo-tools-title">Adjust Draft Photos</p>
+            <p class="photo-tools-copy">Add or remove photos here before using Revise with AI.</p>
+
+            <form action="{{ url_for('add_draft_photos') }}" method="post" enctype="multipart/form-data">
+              <input type="hidden" name="temp_id" value="{{ temp_id }}">
+              <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
+
+              {% for op in options %}
+                <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
+                <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+                <input type="hidden" name="option_{{ op.rank }}_material_notes" value="{{ op.material_notes }}">
+                <input type="hidden" name="option_{{ op.rank }}_mark_notes" value="{{ op.mark_notes }}">
+                <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
+                <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
+                <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
+                <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
+                <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+              {% endfor %}
+
+              <input type="hidden" name="Identification" value="{{ form['Identification'] }}">
+              <input type="hidden" name="Confidence Note" value="{{ form['Confidence Note'] }}">
+              <input type="hidden" name="Material Notes" value="{{ form['Material Notes'] }}">
+              <input type="hidden" name="Mark Notes" value="{{ form['Mark Notes'] }}">
+              <input type="hidden" name="Title" value="{{ form['Title'] }}">
+              <input type="hidden" name="Description" value="{{ form['Description'] }}">
+              <input type="hidden" name="Condition Summary" value="{{ form['Condition Summary'] }}">
+              <input type="hidden" name="Keywords" value="{{ form['Keywords'] }}">
+              <input type="hidden" name="Category" value="{{ form['Category'] }}">
+              <input type="hidden" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
+              <input type="hidden" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
+              <input type="hidden" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
+              <input type="hidden" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
+              <input type="hidden" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
+              <input type="hidden" name="Reference #" value="{{ form['Reference #'] }}">
+              <input type="hidden" name="Item Notes" value="{{ form['Item Notes'] }}">
+              <input type="hidden" name="Consigner #" value="{{ form['Consigner #'] }}">
+              <input type="hidden" name="Shipping Available" value="{{ form['Shipping Available'] }}">
+
+              <div class="field">
+                <label for="editPhotoInput">Add More Photos</label>
+                <input
+                  id="editPhotoInput"
+                  type="file"
+                  name="photos"
+                  accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/*"
+                  multiple
+                >
+              </div>
+
+              <div class="button-row" style="margin-top: 0;">
+                <button type="submit" class="small-button">Add Photos To Draft</button>
+              </div>
+            </form>
+          </div>
+
           <div class="thumb-grid">
             {% for image_file in image_files %}
               <div class="thumb">
                 <img src="{{ image_url_prefix }}{{ image_file }}" alt="Uploaded image">
                 <div class="thumb-name">{{ image_file }}</div>
+                <div class="thumb-actions">
+                  <form action="{{ url_for('remove_draft_photo') }}" method="post">
+                    <input type="hidden" name="temp_id" value="{{ temp_id }}">
+                    <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
+                    <input type="hidden" name="filename" value="{{ image_file }}">
+
+                    {% for op in options %}
+                      <input type="hidden" name="option_{{ op.rank }}_identification" value="{{ op.identification }}">
+                      <input type="hidden" name="option_{{ op.rank }}_confidence_note" value="{{ op.confidence_note }}">
+                      <input type="hidden" name="option_{{ op.rank }}_material_notes" value="{{ op.material_notes }}">
+                      <input type="hidden" name="option_{{ op.rank }}_mark_notes" value="{{ op.mark_notes }}">
+                      <input type="hidden" name="option_{{ op.rank }}_title" value="{{ op.title }}">
+                      <input type="hidden" name="option_{{ op.rank }}_description" value="{{ op.description }}">
+                      <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
+                      <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
+                      <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+                    {% endfor %}
+
+                    <input type="hidden" name="Identification" value="{{ form['Identification'] }}">
+                    <input type="hidden" name="Confidence Note" value="{{ form['Confidence Note'] }}">
+                    <input type="hidden" name="Material Notes" value="{{ form['Material Notes'] }}">
+                    <input type="hidden" name="Mark Notes" value="{{ form['Mark Notes'] }}">
+                    <input type="hidden" name="Title" value="{{ form['Title'] }}">
+                    <input type="hidden" name="Description" value="{{ form['Description'] }}">
+                    <input type="hidden" name="Condition Summary" value="{{ form['Condition Summary'] }}">
+                    <input type="hidden" name="Keywords" value="{{ form['Keywords'] }}">
+                    <input type="hidden" name="Category" value="{{ form['Category'] }}">
+                    <input type="hidden" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
+                    <input type="hidden" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
+                    <input type="hidden" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
+                    <input type="hidden" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
+                    <input type="hidden" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
+                    <input type="hidden" name="Reference #" value="{{ form['Reference #'] }}">
+                    <input type="hidden" name="Item Notes" value="{{ form['Item Notes'] }}">
+                    <input type="hidden" name="Consigner #" value="{{ form['Consigner #'] }}">
+                    <input type="hidden" name="Shipping Available" value="{{ form['Shipping Available'] }}">
+
+                    <button type="submit" class="small-secondary-button">Remove Photo</button>
+                  </form>
+                </div>
               </div>
             {% endfor %}
           </div>
@@ -604,47 +738,6 @@
                   <option value="{{ category }}" {% if form['Category'] == category %}selected{% endif %}>{{ category }}</option>
                 {% endfor %}
               </select>
-            </div>
-
-            <div class="grid-2">
-              <div class="field">
-                <label for="Low Estimate ($)">Low Estimate ($)</label>
-                <input type="text" id="Low Estimate ($)" name="Low Estimate ($)" value="{{ form['Low Estimate ($)'] }}">
-              </div>
-
-              <div class="field">
-                <label for="High Estimate ($)">High Estimate ($)</label>
-                <input type="text" id="High Estimate ($)" name="High Estimate ($)" value="{{ form['High Estimate ($)'] }}">
-              </div>
-            </div>
-
-            <div class="grid-3">
-              <div class="field">
-                <label for="Dimensions - Length">Dimensions - Length</label>
-                <input type="text" id="Dimensions - Length" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
-              </div>
-
-              <div class="field">
-                <label for="Dimensions - Depth">Dimensions - Depth</label>
-                <input type="text" id="Dimensions - Depth" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
-              </div>
-
-              <div class="field">
-                <label for="Dimensions - Height">Dimensions - Height</label>
-                <input type="text" id="Dimensions - Height" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
-              </div>
-            </div>
-
-            <div class="grid-2">
-              <div class="field">
-                <label for="Reference #">Reference #</label>
-                <input type="text" id="Reference #" name="Reference #" value="{{ form['Reference #'] }}">
-              </div>
-
-              <div class="field">
-                <label for="Consigner #">Consigner #</label>
-                <input type="text" id="Consigner #" name="Consigner #" value="{{ form['Consigner #'] }}">
-              </div>
             </div>
 
             <div class="field">
