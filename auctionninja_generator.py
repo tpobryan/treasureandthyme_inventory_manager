@@ -63,6 +63,12 @@ Keyword rules:
 - Do not include unsupported maker or material keywords
 - Keep keywords practical for resale search
 
+Lot handling rules:
+- If the seller notes say the listing is a lot, group, set, collection, bundle, or multiple related items, analyze it as a multi-item lot rather than forcing a single-item identification
+- Titles and descriptions for lots should make clear that the listing includes multiple items
+- If the seller notes include details about specific individual items within the lot, incorporate those details into the description in a concise, factual way
+- Do not collapse a lot into one representative item when the seller notes indicate the listing should cover multiple pieces
+
 Field rules:
 - identification: what the item most likely is
 - confidence_note: short explanation of why this is plausible, including uncertainty when needed

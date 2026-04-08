@@ -171,6 +171,29 @@
       font-size: 0.95rem;
     }
 
+    .option-section {
+      margin-top: 12px;
+    }
+
+    .option-section:first-of-type {
+      margin-top: 0;
+    }
+
+    .option-section-title {
+      margin: 0 0 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .option-divider {
+      height: 1px;
+      margin: 14px 0;
+      background: var(--border);
+    }
+
     .option-label {
       font-weight: 700;
     }
@@ -398,16 +421,36 @@
           {% for option in options %}
             <div class="option-card">
               <h3>Option {{ option.rank }}</h3>
-              <div class="option-grid">
-                <div><span class="option-label">Identification:</span> {{ option.identification }}</div>
-                <div><span class="option-label">Confidence Note:</span> {{ option.confidence_note }}</div>
-                <div><span class="option-label">Material Notes:</span> {{ option.material_notes }}</div>
-                <div><span class="option-label">Mark Notes:</span> {{ option.mark_notes }}</div>
-                <div><span class="option-label">Title:</span> {{ option.title }}</div>
-                <div><span class="option-label">Description:</span> {{ option.description }}</div>
-                <div><span class="option-label">Category:</span> {{ option.category }}</div>
-                <div><span class="option-label">Condition:</span> {{ option.condition_summary }}</div>
-                <div><span class="option-label">Keywords:</span> {{ option.keywords }}</div>
+
+              <div class="option-section">
+                <p class="option-section-title">Listing Draft</p>
+                <div class="option-grid">
+                  <div><span class="option-label">Title:</span> {{ option.title }}</div>
+                  <div><span class="option-label">Description:</span> {{ option.description }}</div>
+                </div>
+              </div>
+
+              <div class="option-divider"></div>
+
+              <div class="option-section">
+                <p class="option-section-title">Listing Details</p>
+                <div class="option-grid">
+                  <div><span class="option-label">Category:</span> {{ option.category }}</div>
+                  <div><span class="option-label">Condition:</span> {{ option.condition_summary }}</div>
+                  <div><span class="option-label">Keywords:</span> {{ option.keywords }}</div>
+                </div>
+              </div>
+
+              <div class="option-divider"></div>
+
+              <div class="option-section">
+                <p class="option-section-title">Why This Was Generated</p>
+                <div class="option-grid">
+                  <div><span class="option-label">Identification:</span> {{ option.identification }}</div>
+                  <div><span class="option-label">Confidence Note:</span> {{ option.confidence_note }}</div>
+                  <div><span class="option-label">Material Notes:</span> {{ option.material_notes }}</div>
+                  <div><span class="option-label">Mark Notes:</span> {{ option.mark_notes }}</div>
+                </div>
               </div>
 
               <form action="{{ url_for('choose_option') }}" method="post" style="margin-top: 12px;">
