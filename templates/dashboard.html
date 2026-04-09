@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auction Dashboard</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --border: #d9deea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --radius: 14px;
+      --ready-bg: #ecfdf5;
+      --ready-text: #166534;
+      --published-bg: #eff6ff;
+      --published-text: #1d4ed8;
+      --update-bg: #fff7ed;
+      --update-text: #c2410c;
+      --removed-bg: #fef2f2;
+      --removed-text: #991b1b;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .topbar {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .button-link {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .button-link:hover {
+      background: var(--accent-hover);
+    }
+    .button-link.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    .button-link.secondary:hover {
+      background: #d1d5db;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.9rem;
+      line-height: 1.2;
+    }
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+    }
+    .summary-card h2 {
+      margin: 0;
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .summary-card p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+    }
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fafafa;
+      align-items: center;
+    }
+    .item-title {
+      font-weight: 700;
+    }
+    .item-meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-top: 4px;
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .status-ready {
+      background: var(--ready-bg);
+      color: var(--ready-text);
+    }
+    .status-published {
+      background: var(--published-bg);
+      color: var(--published-text);
+    }
+    .status-needs-update {
+      background: var(--update-bg);
+      color: var(--update-text);
+    }
+    .status-removed {
+      background: var(--removed-bg);
+      color: var(--removed-text);
+    }
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 1.08rem;
+    }
+    .empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: #334155;
+      font-size: 0.92rem;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    @media (max-width: 980px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 640px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>Auction Dashboard</h1>
+        <p class="sub">A quick view of what is ready, what has been published, and what still needs attention.</p>
+      </div>
+      <div class="button-row">
+        <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
+        <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Items</a>
+        <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="summary-grid">
+        <a class="card summary-card" href="{{ url_for('manage_items', status='ready') }}" style="text-decoration:none; color:inherit;">
+          <h2>{{ counts['ready'] }}</h2>
+          <p>Ready To Export</p>
+        </a>
+        <a class="card summary-card" href="{{ url_for('manage_items', status='needs_update') }}" style="text-decoration:none; color:inherit;">
+          <h2>{{ counts['needs_update'] }}</h2>
+          <p>Need Re-Export</p>
+        </a>
+        <a class="card summary-card" href="{{ url_for('manage_items', status='published') }}" style="text-decoration:none; color:inherit;">
+          <h2>{{ counts['published'] }}</h2>
+          <p>Published</p>
+        </a>
+        <a class="card summary-card" href="{{ url_for('manage_items', status='removed') }}" style="text-decoration:none; color:inherit;">
+          <h2>{{ counts['removed'] }}</h2>
+          <p>Removed</p>
+        </a>
+        <a class="card summary-card" href="{{ url_for('manage_items', status='all') }}" style="text-decoration:none; color:inherit;">
+          <h2>{{ counts['all'] }}</h2>
+          <p>Total Lots</p>
+        </a>
+      </div>
+
+      <div class="layout">
+        <div class="grid">
+          <div class="card">
+            <h2 class="section-title">Needs Attention</h2>
+            {% if needs_update_items %}
+              <div class="list">
+                {% for item in needs_update_items %}
+                  <div class="item-row">
+                    <div>
+                      <div class="item-title">Lot {{ item['lot_number'] }}: {{ item['title'] }}</div>
+                      <div class="item-meta">{{ item['category'] }} · Updated {{ item['updated_at'] }}</div>
+                    </div>
+                    <div>
+                      <span class="status-pill status-needs-update">{{ item['status'] }}</span>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty">No lots currently need re-export.</div>
+            {% endif %}
+          </div>
+
+          <div class="card">
+            <h2 class="section-title">Ready To Publish</h2>
+            {% if ready_items %}
+              <div class="list">
+                {% for item in ready_items %}
+                  <div class="item-row">
+                    <div>
+                      <div class="item-title">Lot {{ item['lot_number'] }}: {{ item['title'] }}</div>
+                      <div class="item-meta">{{ item['category'] }} · Updated {{ item['updated_at'] }}</div>
+                    </div>
+                    <div>
+                      <span class="status-pill status-ready">{{ item['status'] }}</span>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="empty">No ready lots at the moment.</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Recent Exports</h2>
+          {% if recent_exports %}
+            <table>
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Saved</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for export in recent_exports %}
+                  <tr>
+                    <td><a href="{{ url_for('download_export_archive', filename=export['filename']) }}">{{ export['filename'] }}</a></td>
+                    <td>{{ export['modified_at'] }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="empty">No batch exports have been archived yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

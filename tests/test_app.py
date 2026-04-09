@@ -232,6 +232,13 @@ def test_discard_draft_removes_folder_and_state(test_env):
     assert app_module.get_active_draft() is None
 
 
+def test_dashboard_requires_database(test_env):
+    response = test_env["client"].get("/dashboard", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"The auction dashboard is available when DATABASE_URL is configured." in response.data
+
+
 def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
     draft_dir = test_env["uploads_dir"] / "draft123"
     draft_dir.mkdir(parents=True, exist_ok=True)
@@ -762,3 +769,87 @@ def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeyp
     assert download_response.status_code == 200
     assert download_response.mimetype == "text/csv"
     assert b"2000,Lamp" in download_response.data
+
+
+def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2020",
+            "title": "Desk",
+            "description": "Wood desk",
+            "condition_notes": "Used",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "desk",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Furniture",
+            "status": "ready",
+            "image_folder": "2020_desk",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+    app_module.append_item_record(
+        {
+            "lot_number": "2021",
+            "title": "Bottle",
+            "description": "Glass bottle",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "bottle",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Collectibles",
+            "status": "ready",
+            "image_folder": "2021_bottle",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    test_env["client"].post("/export_selected_csv", data={"lot_numbers": ["2021"], "current_filter": "active"})
+    test_env["client"].post(
+        "/items/2021/update",
+        data={
+            "Title": "Bottle",
+            "Description": "Glass bottle with extra detail",
+            "Condition Summary": "Good",
+            "Keywords": "bottle",
+            "Category": "Collectibles",
+            "Low Estimate ($)": "",
+            "High Estimate ($)": "",
+            "Dimensions - Length": "",
+            "Dimensions - Depth": "",
+            "Dimensions - Height": "",
+            "Reference #": "",
+            "Item Notes": "",
+            "Consigner #": "",
+            "Shipping Available": "No",
+            "current_filter": "active",
+        },
+        follow_redirects=True,
+    )
+
+    dashboard_response = test_env["client"].get("/dashboard")
+    assert dashboard_response.status_code == 200
+    assert b"Auction Dashboard" in dashboard_response.data
+    assert b"Ready To Export" in dashboard_response.data
+    assert b"Need Re-Export" in dashboard_response.data
+    assert b"Lot 2021: Bottle" in dashboard_response.data
+    assert b"Lot 2020: Desk" in dashboard_response.data
+    assert b"auction_items_batch_2021-2021_" in dashboard_response.data

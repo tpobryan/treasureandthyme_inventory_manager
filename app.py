@@ -797,6 +797,50 @@ def fetch_manage_item_counts() -> dict[str, int]:
     }
 
 
+def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str, str]]:
+    if not database_enabled() or not statuses:
+        return []
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(statuses)) if dialect == "sqlite" else ", ".join(["%s"] * len(statuses))
+        limit_placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT
+                lot_number,
+                title,
+                status,
+                category,
+                updated_at,
+                published_at
+            FROM auction_items
+            WHERE status IN ({placeholders})
+            ORDER BY updated_at DESC, lot_number DESC
+            LIMIT {limit_placeholder}
+            """,
+            tuple(statuses) + (limit,),
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    items: list[dict[str, str]] = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            item = {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+        elif isinstance(record, dict):
+            item = {key: "" if value is None else str(value) for key, value in record.items()}
+        else:
+            continue
+        items.append(item)
+    return items
+
+
 def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
     if not database_enabled():
         return None
@@ -1658,6 +1702,21 @@ def index():
         active_draft=active_draft,
         database_enabled=database_enabled(),
         storage_label=database_label(),
+    )
+
+
+@app.route("/dashboard", methods=["GET"])
+def dashboard():
+    if not database_enabled():
+        flash("The auction dashboard is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    return render_template(
+        "dashboard.html",
+        counts=fetch_manage_item_counts(),
+        recent_exports=list_export_archives()[:5],
+        needs_update_items=fetch_dashboard_items([ITEM_STATUS_NEEDS_UPDATE], limit=5),
+        ready_items=fetch_dashboard_items([ITEM_STATUS_READY], limit=5),
     )
 
 
