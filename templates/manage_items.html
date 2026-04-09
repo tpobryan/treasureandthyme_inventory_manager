@@ -78,6 +78,44 @@
       margin-bottom: 16px;
     }
 
+    .auction-panel {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 14px;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+
+    .auction-meta {
+      color: #334155;
+      font-size: 0.94rem;
+    }
+
+    .auction-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
+    .auction-actions form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: end;
+      margin: 0;
+    }
+
+    .auction-actions select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font: inherit;
+    }
+
     .toolbar-copy {
       color: var(--muted);
       font-size: 0.94rem;
@@ -251,6 +289,39 @@
       <h1>Manage Export Batches</h1>
       <p class="sub">Choose the saved lots you want to include in the next AuctionNinja CSV export.</p>
       <p class="sub">Status flow: new saves start as <strong>ready</strong>, exported lots become <strong>published</strong>, and future saved-item edits can move published lots to <strong>needs update</strong>.</p>
+
+      {% if current_auction %}
+        <div class="auction-panel">
+          <div class="auction-meta">
+            Working in <strong>auction {{ current_auction.id }}</strong> with status <strong>{{ current_auction.status }}</strong>. Only lots from this auction are shown and exported here.
+          </div>
+          <div class="auction-actions">
+            <form action="{{ url_for('switch_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('manage_items', status=current_filter) }}">
+              <select name="auction_id" aria-label="Switch auction">
+                {% for auction in auction_list %}
+                  <option value="{{ auction.id }}" {% if auction.is_current == '1' %}selected{% endif %}>Auction {{ auction.id }} · {{ auction.status }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="secondary">Switch Auction</button>
+            </form>
+            <form action="{{ url_for('update_auction_status_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('manage_items', status=current_filter) }}">
+              <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
+              <select name="status" aria-label="Auction status">
+                {% for status in auction_statuses %}
+                  <option value="{{ status }}" {% if current_auction.status == status %}selected{% endif %}>{{ status|capitalize }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="secondary">Update Status</button>
+            </form>
+            <form action="{{ url_for('create_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('manage_items', status=current_filter) }}">
+              <button type="submit" class="secondary">Create Next Auction</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
 
       {% with messages = get_flashed_messages() %}
         {% if messages %}

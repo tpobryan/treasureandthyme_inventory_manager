@@ -82,6 +82,15 @@
       flex-wrap: wrap;
       margin-bottom: 16px;
     }
+    .auction-note {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #334155;
+      font-size: 0.94rem;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -119,6 +128,9 @@
     <div class="card">
       <h1>Export History</h1>
       <p class="sub">Archived AuctionNinja CSV batches saved locally by the app.</p>
+      {% if current_auction %}
+        <div class="auction-note">Showing archived exports for <strong>auction {{ current_auction.id }}</strong> with status <strong>{{ current_auction.status }}</strong>.</div>
+      {% endif %}
 
       {% with messages = get_flashed_messages() %}
         {% if messages %}

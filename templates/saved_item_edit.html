@@ -155,6 +155,13 @@
       word-break: break-word;
     }
 
+    .move-form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
     .field {
       margin-bottom: 14px;
     }
@@ -264,6 +271,10 @@
           <h2>Item History</h2>
           <div class="meta-list">
             <div class="meta-item">
+              <div class="meta-label">Auction</div>
+              <div class="meta-value">Auction {{ item['auction_id'] }}</div>
+            </div>
+            <div class="meta-item">
               <div class="meta-label">Created</div>
               <div class="meta-value">{{ item['created_at'] }}</div>
             </div>
@@ -282,6 +293,19 @@
             <div class="meta-item">
               <div class="meta-label">Photo Folder</div>
               <div class="meta-value">{{ item['image_folder'] }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Move To Another Auction</div>
+              <div class="meta-value" style="margin-bottom:10px;">A lot can belong to only one auction. Moving it resets its publish state so it can be exported again in the new auction.</div>
+              <form class="move-form" action="{{ url_for('move_saved_item', lot_number=item['lot_number']) }}" method="post">
+                <input type="hidden" name="current_filter" value="{{ current_filter }}">
+                <select name="auction_id" aria-label="Move to auction">
+                  {% for auction in auction_list %}
+                    <option value="{{ auction.id }}" {% if item['auction_id'] == auction.id %}selected{% endif %}>Auction {{ auction.id }} · {{ auction.status }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="secondary">Move Lot</button>
+              </form>
             </div>
           </div>
         </div>

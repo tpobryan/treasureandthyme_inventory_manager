@@ -85,6 +85,42 @@
       display: grid;
       gap: 18px;
     }
+    .auction-panel {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+    .auction-panel h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .auction-meta {
+      color: #334155;
+      font-size: 0.94rem;
+    }
+    .auction-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+    .auction-actions form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: end;
+      margin: 0;
+    }
+    .auction-actions select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font: inherit;
+    }
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -213,6 +249,40 @@
     </div>
 
     <div class="grid">
+      {% if current_auction %}
+        <div class="auction-panel">
+          <div>
+            <h2>Current Auction: {{ current_auction.id }}</h2>
+            <div class="auction-meta">Status: <strong>{{ current_auction.status }}</strong>. Dashboard counts and exports below are scoped to this auction.</div>
+          </div>
+          <div class="auction-actions">
+            <form action="{{ url_for('switch_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('dashboard') }}">
+              <select name="auction_id" aria-label="Switch auction">
+                {% for auction in auction_list %}
+                  <option value="{{ auction.id }}" {% if auction.is_current == '1' %}selected{% endif %}>Auction {{ auction.id }} · {{ auction.status }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="button-link secondary">Switch Auction</button>
+            </form>
+            <form action="{{ url_for('update_auction_status_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('dashboard') }}">
+              <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
+              <select name="status" aria-label="Auction status">
+                {% for status in auction_statuses %}
+                  <option value="{{ status }}" {% if current_auction.status == status %}selected{% endif %}>{{ status|capitalize }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="button-link secondary">Update Status</button>
+            </form>
+            <form action="{{ url_for('create_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('dashboard') }}">
+              <button type="submit" class="button-link secondary">Create Next Auction</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
       <div class="summary-grid">
         <a class="card summary-card" href="{{ url_for('manage_items', status='ready') }}" style="text-decoration:none; color:inherit;">
           <h2>{{ counts['ready'] }}</h2>

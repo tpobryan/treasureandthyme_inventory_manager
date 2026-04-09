@@ -67,6 +67,49 @@
       font-weight: 600;
     }
 
+    .auction-panel {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+
+    .auction-panel h2 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .auction-meta {
+      color: #334155;
+      font-size: 0.94rem;
+    }
+
+    .auction-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
+    .auction-actions form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: end;
+      margin: 0;
+    }
+
+    .auction-actions select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font: inherit;
+    }
+
     .flash {
       margin-bottom: 16px;
       padding: 12px 14px;
@@ -448,6 +491,40 @@
         Add photos from your library or take them one at a time, build up the photo set here, then analyze.
       </p>
 
+      {% if current_auction %}
+        <div class="auction-panel">
+          <div>
+            <h2>Current Auction: {{ current_auction.id }}</h2>
+            <div class="auction-meta">Status: <strong>{{ current_auction.status }}</strong>. New lots, exports, and resume-draft state will use this auction.</div>
+          </div>
+          <div class="auction-actions">
+            <form action="{{ url_for('switch_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('index') }}">
+              <select name="auction_id" aria-label="Switch auction">
+                {% for auction in auction_list %}
+                  <option value="{{ auction.id }}" {% if auction.is_current == '1' %}selected{% endif %}>Auction {{ auction.id }} · {{ auction.status }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="secondary">Switch Auction</button>
+            </form>
+            <form action="{{ url_for('update_auction_status_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('index') }}">
+              <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
+              <select name="status" aria-label="Auction status">
+                {% for status in auction_statuses %}
+                  <option value="{{ status }}" {% if current_auction.status == status %}selected{% endif %}>{{ status|capitalize }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="secondary">Update Status</button>
+            </form>
+            <form action="{{ url_for('create_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('index') }}">
+              <button type="submit" class="secondary">Create Next Auction</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
       <div class="lot-preview">Next lot number: {{ next_lot }}</div>
 
       <form id="analyzeForm" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
@@ -492,7 +569,7 @@
 
         <div class="button-row">
           <button type="submit" id="analyzeButton">Analyze</button>
-          <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download AuctionNinja CSV</a>
+          <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download Auction {{ current_auction.id if current_auction else '' }} CSV</a>
           {% if database_enabled %}
             <a class="button-link secondary" href="{{ url_for('dashboard') }}">Auction Dashboard</a>
             <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>

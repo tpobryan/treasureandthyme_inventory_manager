@@ -81,10 +81,19 @@ CSV_HEADER = [
     "Category",
 ]
 DEFAULT_STARTING_LOT = 1999
+DEFAULT_AUCTION_ID = 4
 ITEM_STATUS_READY = "ready"
 ITEM_STATUS_PUBLISHED = "published"
 ITEM_STATUS_NEEDS_UPDATE = "needs_update"
 ITEM_STATUS_REMOVED = "removed"
+AUCTION_STATUS_PREPARING = "preparing"
+AUCTION_STATUS_ACTIVE = "active"
+AUCTION_STATUS_COMPLETED = "completed"
+AUCTION_STATUSES = {
+    AUCTION_STATUS_PREPARING,
+    AUCTION_STATUS_ACTIVE,
+    AUCTION_STATUS_COMPLETED,
+}
 EXPORTABLE_STATUSES = {ITEM_STATUS_READY, ITEM_STATUS_NEEDS_UPDATE, ITEM_STATUS_PUBLISHED}
 MANAGE_ITEM_FILTERS = {
     "active": {ITEM_STATUS_READY, ITEM_STATUS_PUBLISHED, ITEM_STATUS_NEEDS_UPDATE},
@@ -173,6 +182,7 @@ def set_active_draft(
 
         options_json = json.dumps(options)
         form_json = json.dumps(form)
+        slot_name = f"auction:{get_current_auction_id()}"
 
         try:
             cursor = connection.cursor()
@@ -189,7 +199,7 @@ def set_active_draft(
                         updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """,
-                    ("default", temp_id, seller_notes, options_json, form_json, revision_request),
+                    (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
                 )
             else:
                 cursor.execute(
@@ -209,7 +219,7 @@ def set_active_draft(
                         form_json = VALUES(form_json),
                         revision_request = VALUES(revision_request)
                     """,
-                    ("default", temp_id, seller_notes, options_json, form_json, revision_request),
+                    (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
                 )
             connection.commit()
         finally:
@@ -233,6 +243,7 @@ def clear_active_draft(temp_id: str | None = None) -> None:
         ensure_item_store_ready()
         connection, dialect = connect_item_store()
         assert connection is not None
+        slot_name = f"auction:{get_current_auction_id()}"
 
         try:
             cursor = connection.cursor()
@@ -240,7 +251,7 @@ def clear_active_draft(temp_id: str | None = None) -> None:
             if temp_id:
                 cursor.execute(
                     f"SELECT temp_id FROM active_drafts WHERE slot_name = {placeholder}",
-                    ("default",),
+                    (slot_name,),
                 )
                 record = cursor.fetchone()
                 current_temp_id = ""
@@ -255,7 +266,7 @@ def clear_active_draft(temp_id: str | None = None) -> None:
                     return
             cursor.execute(
                 f"DELETE FROM active_drafts WHERE slot_name = {placeholder}",
-                ("default",),
+                (slot_name,),
             )
             connection.commit()
         finally:
@@ -280,6 +291,7 @@ def get_active_draft() -> dict[str, Any] | None:
         ensure_item_store_ready()
         connection, dialect = connect_item_store()
         assert connection is not None
+        slot_name = f"auction:{get_current_auction_id()}"
 
         try:
             cursor = connection.cursor()
@@ -290,7 +302,7 @@ def get_active_draft() -> dict[str, Any] | None:
                 FROM active_drafts
                 WHERE slot_name = {placeholder}
                 """,
-                ("default",),
+                (slot_name,),
             )
             record = cursor.fetchone()
         finally:
@@ -477,6 +489,25 @@ def database_label() -> str:
     return "Database"
 
 
+def default_auction_id() -> int:
+    raw_value = os.getenv("CURRENT_AUCTION_ID", "").strip() or os.getenv("AUCTION_NUMBER", "").strip()
+    if raw_value.isdigit():
+        return int(raw_value)
+    return DEFAULT_AUCTION_ID
+
+
+def _extract_row_value(row: Any, key: str, index: int = 0, default: Any = None) -> Any:
+    if row is None:
+        return default
+    if isinstance(row, sqlite3.Row):
+        return row[key]
+    if isinstance(row, dict):
+        return row.get(key, default)
+    if isinstance(row, (list, tuple)) and len(row) > index:
+        return row[index]
+    return default
+
+
 def connect_item_store():
     database_url = get_database_url()
     if not database_url:
@@ -529,8 +560,20 @@ def ensure_item_store_ready() -> None:
         if dialect == "sqlite":
             cursor.execute(
                 """
+                CREATE TABLE IF NOT EXISTS auctions (
+                    id INTEGER PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    is_current INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS auction_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    auction_id INTEGER,
                     lot_number INTEGER NOT NULL UNIQUE,
                     title TEXT NOT NULL,
                     description TEXT NOT NULL,
@@ -555,12 +598,14 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_sqlite_column(cursor, "auction_items", "auction_id", "INTEGER")
             _ensure_sqlite_column(cursor, "auction_items", "last_export_batch", "TEXT")
             _ensure_sqlite_column(cursor, "auction_items", "published_at", "TEXT")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS export_batches (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    auction_id INTEGER,
                     filename TEXT NOT NULL UNIQUE,
                     export_type TEXT NOT NULL,
                     lot_numbers TEXT NOT NULL,
@@ -570,11 +615,13 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_sqlite_column(cursor, "export_batches", "auction_id", "INTEGER")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS ftp_uploads (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     lot_number INTEGER NOT NULL UNIQUE,
+                    auction_id INTEGER,
                     auction_number TEXT NOT NULL,
                     auction_photo_index INTEGER NOT NULL,
                     remote_names TEXT NOT NULL,
@@ -582,6 +629,7 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_sqlite_column(cursor, "ftp_uploads", "auction_id", "INTEGER")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS auction_photo_counters (
@@ -604,11 +652,25 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _bootstrap_auction_rows(cursor, dialect)
+            _backfill_auction_scope(cursor, dialect)
         else:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auctions (
+                    id INT PRIMARY KEY,
+                    status VARCHAR(32) NOT NULL,
+                    is_current TINYINT(1) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+                """
+            )
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS auction_items (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    auction_id INT NULL,
                     lot_number INT NOT NULL UNIQUE,
                     title TEXT NOT NULL,
                     description LONGTEXT NOT NULL,
@@ -633,12 +695,14 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_mysql_column(cursor, "auction_items", "auction_id", "INT NULL")
             _ensure_mysql_column(cursor, "auction_items", "last_export_batch", "VARCHAR(255) NULL")
             _ensure_mysql_column(cursor, "auction_items", "published_at", "TIMESTAMP NULL DEFAULT NULL")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS export_batches (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    auction_id INT NULL,
                     filename VARCHAR(255) NOT NULL UNIQUE,
                     export_type VARCHAR(64) NOT NULL,
                     lot_numbers TEXT NOT NULL,
@@ -648,11 +712,13 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_mysql_column(cursor, "export_batches", "auction_id", "INT NULL")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS ftp_uploads (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     lot_number INT NOT NULL UNIQUE,
+                    auction_id INT NULL,
                     auction_number VARCHAR(255) NOT NULL,
                     auction_photo_index INT NOT NULL,
                     remote_names TEXT NOT NULL,
@@ -660,6 +726,7 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_mysql_column(cursor, "ftp_uploads", "auction_id", "INT NULL")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS auction_photo_counters (
@@ -682,6 +749,8 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _bootstrap_auction_rows(cursor, dialect)
+            _backfill_auction_scope(cursor, dialect)
         connection.commit()
     finally:
         connection.close()
@@ -700,6 +769,373 @@ def _ensure_mysql_column(cursor, table_name: str, column_name: str, definition: 
         cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
 
 
+def _bootstrap_auction_rows(cursor, dialect: str) -> None:
+    cursor.execute("SELECT COUNT(*) AS auction_count FROM auctions")
+    auction_count = int(_extract_row_value(cursor.fetchone(), "auction_count", 0, 0) or 0)
+    if auction_count == 0:
+        starting_auction_id = default_auction_id()
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                INSERT INTO auctions (id, status, is_current, created_at, updated_at)
+                VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (starting_auction_id, AUCTION_STATUS_ACTIVE),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO auctions (id, status, is_current)
+                VALUES (%s, %s, 1)
+                """,
+                (starting_auction_id, AUCTION_STATUS_ACTIVE),
+            )
+        return
+
+    cursor.execute("SELECT COUNT(*) AS current_count FROM auctions WHERE is_current = 1")
+    current_count = int(_extract_row_value(cursor.fetchone(), "current_count", 0, 0) or 0)
+    if current_count > 0:
+        return
+
+    cursor.execute("SELECT MAX(id) AS latest_id FROM auctions")
+    latest_id = int(_extract_row_value(cursor.fetchone(), "latest_id", 0, default_auction_id()) or default_auction_id())
+    placeholder = "?" if dialect == "sqlite" else "%s"
+    if dialect == "sqlite":
+        cursor.execute("UPDATE auctions SET is_current = 0")
+        cursor.execute(
+            f"""
+            UPDATE auctions
+            SET is_current = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = {placeholder}
+            """,
+            (latest_id,),
+        )
+    else:
+        cursor.execute("UPDATE auctions SET is_current = 0")
+        cursor.execute(
+            f"""
+            UPDATE auctions
+            SET is_current = 1
+            WHERE id = {placeholder}
+            """,
+            (latest_id,),
+        )
+
+
+def _backfill_auction_scope(cursor, dialect: str) -> None:
+    default_id = default_auction_id()
+    if dialect == "sqlite":
+        cursor.execute(
+            """
+            UPDATE auction_items
+            SET auction_id = ?
+            WHERE auction_id IS NULL
+            """,
+            (default_id,),
+        )
+        cursor.execute(
+            """
+            UPDATE export_batches
+            SET auction_id = ?
+            WHERE auction_id IS NULL
+            """,
+            (default_id,),
+        )
+        cursor.execute(
+            """
+            UPDATE ftp_uploads
+            SET auction_id = ?
+            WHERE auction_id IS NULL
+            """,
+            (default_id,),
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE auction_items
+            SET auction_id = %s
+            WHERE auction_id IS NULL
+            """,
+            (default_id,),
+        )
+        cursor.execute(
+            """
+            UPDATE export_batches
+            SET auction_id = %s
+            WHERE auction_id IS NULL
+            """,
+            (default_id,),
+        )
+        cursor.execute(
+            """
+            UPDATE ftp_uploads
+            SET auction_id = %s
+            WHERE auction_id IS NULL
+            """,
+            (default_id,),
+        )
+
+
+def get_current_auction() -> dict[str, str] | None:
+    if not database_enabled():
+        return None
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, status, is_current, created_at, updated_at
+            FROM auctions
+            WHERE is_current = 1
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        )
+        record = cursor.fetchone()
+        if not record:
+            cursor.execute(
+                """
+                SELECT id, status, is_current, created_at, updated_at
+                FROM auctions
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            )
+            record = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if not record:
+        return None
+
+    if isinstance(record, sqlite3.Row):
+        return {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+    if isinstance(record, dict):
+        return {key: "" if value is None else str(value) for key, value in record.items()}
+    return None
+
+
+def get_current_auction_id() -> int:
+    if not database_enabled():
+        return default_auction_id()
+
+    auction = get_current_auction()
+    if not auction:
+        return default_auction_id()
+    return int(auction.get("id", default_auction_id()))
+
+
+def list_auctions() -> list[dict[str, str]]:
+    if not database_enabled():
+        return []
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, status, is_current, created_at, updated_at
+            FROM auctions
+            ORDER BY id DESC
+            """
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    auctions: list[dict[str, str]] = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            auctions.append({key: "" if record[key] is None else str(record[key]) for key in record.keys()})
+        elif isinstance(record, dict):
+            auctions.append({key: "" if value is None else str(value) for key, value in record.items()})
+    return auctions
+
+
+def create_next_auction() -> dict[str, str]:
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT MAX(id) AS latest_id FROM auctions")
+        latest_id = int(_extract_row_value(cursor.fetchone(), "latest_id", 0, default_auction_id()) or default_auction_id())
+        next_id = latest_id + 1
+        if dialect == "sqlite":
+            cursor.execute("UPDATE auctions SET is_current = 0")
+            cursor.execute(
+                """
+                INSERT INTO auctions (id, status, is_current, created_at, updated_at)
+                VALUES (?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (next_id, AUCTION_STATUS_PREPARING),
+            )
+        else:
+            cursor.execute("UPDATE auctions SET is_current = 0")
+            cursor.execute(
+                """
+                INSERT INTO auctions (id, status, is_current)
+                VALUES (%s, %s, 1)
+                """,
+                (next_id, AUCTION_STATUS_PREPARING),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+    auction = get_current_auction()
+    if not auction:
+        raise RuntimeError("Failed to create the next auction.")
+    return auction
+
+
+def switch_current_auction(auction_id: int) -> bool:
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(f"SELECT id FROM auctions WHERE id = {placeholder}", (auction_id,))
+        if not cursor.fetchone():
+            return False
+        if dialect == "sqlite":
+            cursor.execute("UPDATE auctions SET is_current = 0")
+            cursor.execute(
+                f"""
+                UPDATE auctions
+                SET is_current = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = {placeholder}
+                """,
+                (auction_id,),
+            )
+        else:
+            cursor.execute("UPDATE auctions SET is_current = 0")
+            cursor.execute(
+                f"""
+                UPDATE auctions
+                SET is_current = 1
+                WHERE id = {placeholder}
+                """,
+                (auction_id,),
+            )
+        connection.commit()
+        return True
+    finally:
+        connection.close()
+
+
+def update_auction_status(auction_id: int, status: str) -> bool:
+    if status not in AUCTION_STATUSES:
+        return False
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ("?", "?") if dialect == "sqlite" else ("%s", "%s")
+        if dialect == "sqlite":
+            cursor.execute(
+                f"""
+                UPDATE auctions
+                SET status = {placeholders[0]}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = {placeholders[1]}
+                """,
+                (status, auction_id),
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE auctions
+                SET status = {placeholders[0]}
+                WHERE id = {placeholders[1]}
+                """,
+                (status, auction_id),
+            )
+        connection.commit()
+        return cursor.rowcount > 0
+    finally:
+        connection.close()
+
+
+def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
+    existing_item = fetch_saved_item(lot_number)
+    if not existing_item:
+        return False
+    if str(existing_item.get("auction_id", "")).isdigit() and int(existing_item["auction_id"]) == target_auction_id:
+        return True
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(f"SELECT id FROM auctions WHERE id = {placeholder}", (target_auction_id,))
+        if not cursor.fetchone():
+            return False
+
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                UPDATE auction_items
+                SET
+                    auction_id = ?,
+                    status = ?,
+                    last_export_batch = '',
+                    published_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number = ?
+                """,
+                (target_auction_id, ITEM_STATUS_READY, lot_number),
+            )
+            cursor.execute(
+                """
+                UPDATE ftp_uploads
+                SET auction_id = ?
+                WHERE lot_number = ?
+                """,
+                (target_auction_id, lot_number),
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE auction_items
+                SET
+                    auction_id = %s,
+                    status = %s,
+                    last_export_batch = '',
+                    published_at = NULL
+                WHERE lot_number = %s
+                """,
+                (target_auction_id, ITEM_STATUS_READY, lot_number),
+            )
+            cursor.execute(
+                """
+                UPDATE ftp_uploads
+                SET auction_id = %s
+                WHERE lot_number = %s
+                """,
+                (target_auction_id, lot_number),
+            )
+        connection.commit()
+        return True
+    finally:
+        connection.close()
+
+
 def fetch_last_lot_from_store() -> int:
     if not database_enabled():
         ensure_lot_state()
@@ -707,7 +1143,7 @@ def fetch_last_lot_from_store() -> int:
         return int(data.get("last_lot", DEFAULT_STARTING_LOT))
 
     ensure_item_store_ready()
-    connection, _dialect = connect_item_store()
+    connection, dialect = connect_item_store()
     assert connection is not None
 
     try:
@@ -729,6 +1165,7 @@ def fetch_last_lot_from_store() -> int:
 
 def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: str) -> dict[str, str]:
     return {
+        "auction_id": str(get_current_auction_id()),
         "lot_number": str(lot_number),
         "title": form["Title"],
         "description": form["Description"],
@@ -779,10 +1216,12 @@ def append_item_record(record: dict[str, str]) -> None:
 
     try:
         cursor = connection.cursor()
-        placeholders = ", ".join(["?"] * 17) if dialect == "sqlite" else ", ".join(["%s"] * 17)
+        auction_id = int(record.get("auction_id", get_current_auction_id()))
+        placeholders = ", ".join(["?"] * 18) if dialect == "sqlite" else ", ".join(["%s"] * 18)
         cursor.execute(
             f"""
             INSERT INTO auction_items (
+                auction_id,
                 lot_number,
                 title,
                 description,
@@ -803,6 +1242,7 @@ def append_item_record(record: dict[str, str]) -> None:
             ) VALUES ({placeholders})
             """,
             (
+                auction_id,
                 int(record["lot_number"]),
                 record["title"],
                 record["description"],
@@ -834,6 +1274,7 @@ def mark_lots_as_published(lot_numbers: list[int], export_batch_name: str) -> No
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -853,16 +1294,12 @@ def mark_lots_as_published(lot_numbers: list[int], export_batch_name: str) -> No
                     last_export_batch = ?,
                     published_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE lot_number IN ({placeholders})
+                WHERE auction_id = ?
+                  AND lot_number IN ({placeholders})
                 """,
-                params,
+                (ITEM_STATUS_PUBLISHED, export_batch_name, current_auction_id, *lot_numbers),
             )
         else:
-            params = (
-                ITEM_STATUS_PUBLISHED,
-                export_batch_name,
-                *lot_numbers,
-            )
             cursor.execute(
                 f"""
                 UPDATE auction_items
@@ -870,9 +1307,10 @@ def mark_lots_as_published(lot_numbers: list[int], export_batch_name: str) -> No
                     status = %s,
                     last_export_batch = %s,
                     published_at = CURRENT_TIMESTAMP
-                WHERE lot_number IN ({placeholders})
+                WHERE auction_id = %s
+                  AND lot_number IN ({placeholders})
                 """,
-                params,
+                (ITEM_STATUS_PUBLISHED, export_batch_name, current_auction_id, *lot_numbers),
             )
         connection.commit()
     finally:
@@ -887,13 +1325,14 @@ def fetch_export_rows() -> list[list[str]]:
         return rows[1:]
 
     ensure_item_store_ready()
-    connection, _dialect = connect_item_store()
+    connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT
                 lot_number,
                 title,
@@ -911,9 +1350,11 @@ def fetch_export_rows() -> list[list[str]]:
                 shipping_available,
                 category
             FROM auction_items
-            WHERE status != 'removed'
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
+              AND status != 'removed'
             ORDER BY lot_number
-            """
+            """,
+            (current_auction_id,),
         )
         records = cursor.fetchall()
     finally:
@@ -948,6 +1389,7 @@ def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -966,10 +1408,11 @@ def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
                 published_at,
                 last_export_batch
             FROM auction_items
-            WHERE status IN ({placeholders})
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
+              AND status IN ({placeholders})
             ORDER BY lot_number
             """,
-            tuple(statuses),
+            (current_auction_id, *tuple(statuses)),
         )
         records = cursor.fetchall()
     finally:
@@ -992,17 +1435,20 @@ def fetch_manage_item_counts() -> dict[str, int]:
         return {key: 0 for key in MANAGE_ITEM_FILTERS}
 
     ensure_item_store_ready()
-    connection, _dialect = connect_item_store()
+    connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
         cursor.execute(
-            """
+            f"""
             SELECT status, COUNT(*) AS item_count
             FROM auction_items
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
             GROUP BY status
-            """
+            """,
+            (current_auction_id,),
         )
         records = cursor.fetchall()
     finally:
@@ -1044,6 +1490,7 @@ def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str,
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -1059,11 +1506,12 @@ def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str,
                 updated_at,
                 published_at
             FROM auction_items
-            WHERE status IN ({placeholders})
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
+              AND status IN ({placeholders})
             ORDER BY updated_at DESC, lot_number DESC
             LIMIT {limit_placeholder}
             """,
-            tuple(statuses) + (limit,),
+            (current_auction_id, *tuple(statuses), limit),
         )
         records = cursor.fetchall()
     finally:
@@ -1454,6 +1902,7 @@ def fetch_export_rows_for_lots(lot_numbers: list[int]) -> list[list[str]]:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -1477,11 +1926,12 @@ def fetch_export_rows_for_lots(lot_numbers: list[int]) -> list[list[str]]:
                 shipping_available,
                 category
             FROM auction_items
-            WHERE status != 'removed'
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
+              AND status != 'removed'
               AND lot_number IN ({placeholders})
             ORDER BY lot_number
             """,
-            tuple(lot_numbers),
+            (current_auction_id, *tuple(lot_numbers)),
         )
         records = cursor.fetchall()
     finally:
@@ -1780,7 +2230,7 @@ def get_ftp_upload_record(lot_number: int | str) -> dict[str, object] | None:
             placeholder = "?" if dialect == "sqlite" else "%s"
             cursor.execute(
                 f"""
-                SELECT lot_number, auction_number, auction_photo_index, remote_names
+                SELECT lot_number, auction_id, auction_number, auction_photo_index, remote_names
                 FROM ftp_uploads
                 WHERE lot_number = {placeholder}
                 """,
@@ -1808,6 +2258,7 @@ def get_ftp_upload_record(lot_number: int | str) -> dict[str, object] | None:
 
         return {
             "lot_number": int(row.get("lot_number", lot_number)),
+            "auction_id": int(row.get("auction_id", 0) or 0),
             "auction_number": str(row.get("auction_number", "")),
             "auction_photo_index": int(row.get("auction_photo_index", 0)),
             "remote_names": remote_names_list,
@@ -1831,6 +2282,7 @@ def record_ftp_upload(
         assert connection is not None
 
         serialized_remote_names = ",".join(remote_names)
+        current_auction_id = get_current_auction_id()
 
         try:
             cursor = connection.cursor()
@@ -1839,13 +2291,15 @@ def record_ftp_upload(
                     """
                     INSERT OR REPLACE INTO ftp_uploads (
                         lot_number,
+                        auction_id,
                         auction_number,
                         auction_photo_index,
                         remote_names
-                    ) VALUES (?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         lot_number,
+                        current_auction_id,
                         str(auction_number),
                         int(auction_photo_index),
                         serialized_remote_names,
@@ -1856,17 +2310,20 @@ def record_ftp_upload(
                     """
                     INSERT INTO ftp_uploads (
                         lot_number,
+                        auction_id,
                         auction_number,
                         auction_photo_index,
                         remote_names
-                    ) VALUES (%s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
+                        auction_id = VALUES(auction_id),
                         auction_number = VALUES(auction_number),
                         auction_photo_index = VALUES(auction_photo_index),
                         remote_names = VALUES(remote_names)
                     """,
                     (
                         lot_number,
+                        current_auction_id,
                         str(auction_number),
                         int(auction_photo_index),
                         serialized_remote_names,
@@ -2174,6 +2631,7 @@ def record_export_batch(
     assert connection is not None
 
     serialized_lots = ",".join(str(lot_number) for lot_number in lot_numbers)
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -2181,14 +2639,16 @@ def record_export_batch(
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO export_batches (
+                    auction_id,
                     filename,
                     export_type,
                     lot_numbers,
                     lot_count,
                     archive_path
-                ) VALUES (?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    current_auction_id,
                     filename,
                     export_type,
                     serialized_lots,
@@ -2200,19 +2660,22 @@ def record_export_batch(
             cursor.execute(
                 """
                 INSERT INTO export_batches (
+                    auction_id,
                     filename,
                     export_type,
                     lot_numbers,
                     lot_count,
                     archive_path
-                ) VALUES (%s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
+                    auction_id = VALUES(auction_id),
                     export_type = VALUES(export_type),
                     lot_numbers = VALUES(lot_numbers),
                     lot_count = VALUES(lot_count),
                     archive_path = VALUES(archive_path)
                 """,
                 (
+                    current_auction_id,
                     filename,
                     export_type,
                     serialized_lots,
@@ -2229,17 +2692,20 @@ def list_export_archives() -> list[dict[str, str]]:
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     if database_enabled():
         ensure_item_store_ready()
-        connection, _dialect = connect_item_store()
+        connection, dialect = connect_item_store()
         assert connection is not None
+        current_auction_id = get_current_auction_id()
 
         try:
             cursor = connection.cursor()
             cursor.execute(
-                """
-                SELECT filename, export_type, lot_numbers, lot_count, archive_path, created_at
+                f"""
+                SELECT auction_id, filename, export_type, lot_numbers, lot_count, archive_path, created_at
                 FROM export_batches
+                WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
                 ORDER BY created_at DESC, id DESC
-                """
+                """,
+                (current_auction_id,),
             )
             records = cursor.fetchall()
         finally:
@@ -2258,6 +2724,7 @@ def list_export_archives() -> list[dict[str, str]]:
             archives.append(
                 {
                     "filename": row["filename"],
+                    "auction_id": row["auction_id"],
                     "export_type": row["export_type"],
                     "lot_numbers": row["lot_numbers"],
                     "lot_count": row["lot_count"],
@@ -2290,6 +2757,7 @@ def fetch_export_batch(filename: str) -> dict[str, str] | None:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -2298,9 +2766,10 @@ def fetch_export_batch(filename: str) -> dict[str, str] | None:
             f"""
             SELECT filename, export_type, lot_numbers, lot_count, archive_path, created_at
             FROM export_batches
-            WHERE filename = {placeholder}
+            WHERE auction_id = {placeholder}
+              AND filename = {placeholder}
             """,
-            (filename,),
+            (current_auction_id, filename),
         )
         record = cursor.fetchone()
     finally:
@@ -2329,7 +2798,7 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
         placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
         cursor.execute(
             f"""
-            SELECT lot_number, title, status, category, last_export_batch, updated_at, published_at
+            SELECT auction_id, lot_number, title, status, category, last_export_batch, updated_at, published_at
             FROM auction_items
             WHERE lot_number IN ({placeholders})
             ORDER BY lot_number
@@ -2350,6 +2819,74 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
             continue
         items.append(row)
     return items
+
+
+def current_auction_number_for_upload() -> str:
+    if database_enabled():
+        return str(get_current_auction_id())
+    return os.getenv("AUCTION_NUMBER", "").strip()
+
+
+@app.context_processor
+def inject_auction_context() -> dict[str, Any]:
+    if not database_enabled():
+        return {
+            "current_auction": None,
+            "auction_list": [],
+            "auction_statuses": [],
+        }
+
+    return {
+        "current_auction": get_current_auction(),
+        "auction_list": list_auctions(),
+        "auction_statuses": [
+            AUCTION_STATUS_PREPARING,
+            AUCTION_STATUS_ACTIVE,
+            AUCTION_STATUS_COMPLETED,
+        ],
+    }
+
+
+@app.route("/auctions/create_next", methods=["POST"])
+def create_auction_route():
+    if not database_enabled():
+        flash("Auction management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    auction = create_next_auction()
+    flash(f"Created auction {auction['id']} and switched to it.")
+    return redirect(request.form.get("return_to") or url_for("dashboard"))
+
+
+@app.route("/auctions/switch", methods=["POST"])
+def switch_auction_route():
+    if not database_enabled():
+        flash("Auction management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    auction_id = request.form.get("auction_id", "").strip()
+    if not auction_id.isdigit() or not switch_current_auction(int(auction_id)):
+        flash("Choose a valid auction to switch to.")
+        return redirect(request.form.get("return_to") or url_for("dashboard"))
+
+    flash(f"Now working in auction {auction_id}.")
+    return redirect(request.form.get("return_to") or url_for("dashboard"))
+
+
+@app.route("/auctions/status", methods=["POST"])
+def update_auction_status_route():
+    if not database_enabled():
+        flash("Auction management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    auction_id = request.form.get("auction_id", "").strip()
+    status = request.form.get("status", "").strip().lower()
+    if not auction_id.isdigit() or not update_auction_status(int(auction_id), status):
+        flash("Choose a valid auction and status.")
+        return redirect(request.form.get("return_to") or url_for("dashboard"))
+
+    flash(f"Auction {auction_id} is now marked {status}.")
+    return redirect(request.form.get("return_to") or url_for("dashboard"))
 
 
 @app.route("/", methods=["GET"])
@@ -2390,7 +2927,7 @@ def export_csv():
     if not database_enabled() and CSV_PATH.exists():
         return send_file(CSV_PATH, as_attachment=True, download_name=CSV_PATH.name)
 
-    filename = f"auction_items_export_{time.strftime('%Y%m%d')}.csv"
+    filename = f"auction_{get_current_auction_id()}_items_export_{time.strftime('%Y%m%d')}.csv"
     csv_text = build_csv_text(rows)
     lot_numbers = lot_numbers_from_rows(rows)
     archive_path = archive_export_csv(filename, csv_text)
@@ -2567,6 +3104,28 @@ def remove_saved_item(lot_number: int):
     return redirect(url_for("manage_items", status=current_filter))
 
 
+@app.route("/items/<int:lot_number>/move", methods=["POST"])
+def move_saved_item(lot_number: int):
+    current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
+    if not database_enabled():
+        flash("Saved item management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    target_auction_id = request.form.get("auction_id", "").strip()
+    if not target_auction_id.isdigit():
+        flash("Choose a valid auction to move this lot.")
+        return redirect(url_for("edit_saved_item", lot_number=lot_number, status=current_filter))
+
+    if move_item_to_auction(lot_number, int(target_auction_id)):
+        flash(
+            f"Moved lot {lot_number} to auction {target_auction_id}. "
+            "Its publish state was reset so it can be reviewed and exported there."
+        )
+    else:
+        flash(f"Lot {lot_number} could not be moved.")
+    return redirect(url_for("manage_items", status=current_filter))
+
+
 @app.route("/items/<int:lot_number>/restore", methods=["POST"])
 def restore_saved_item(lot_number: int):
     current_filter = normalize_manage_filter(request.form.get("current_filter", "removed"))
@@ -2647,7 +3206,7 @@ def export_selected_csv():
 
     first_lot = selected_lots[0]
     last_lot = selected_lots[-1]
-    filename = f"auction_items_batch_{first_lot}-{last_lot}_{time.strftime('%Y%m%d')}.csv"
+    filename = f"auction_{get_current_auction_id()}_batch_{first_lot}-{last_lot}_{time.strftime('%Y%m%d')}.csv"
 
     mark_lots_as_published(
         lot_numbers=selected_lots,
@@ -2916,7 +3475,7 @@ def save():
     append_item_record(record)
     clear_active_draft(temp_id=temp_id)
 
-    auction_number = os.getenv("AUCTION_NUMBER", "").strip()
+    auction_number = current_auction_number_for_upload()
     uploaded_names = []
 
     if auction_number:

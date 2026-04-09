@@ -421,7 +421,7 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
     text = response.data.decode("utf-8")
     assert "Lot Number,Lead,Description" in text
     assert "2005,Lamp,Brass lamp,Working" in text
-    export_files = list(test_env["exports_dir"].glob("auction_items_export_*.csv"))
+    export_files = list(test_env["exports_dir"].glob("auction_4_items_export_*.csv"))
     assert len(export_files) == 1
     assert "2005,Lamp,Brass lamp,Working" in export_files[0].read_text(encoding="utf-8")
 
@@ -435,7 +435,7 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
         ).fetchone()
 
     assert row[0] == "published"
-    assert row[1].startswith("auction_items_export_")
+    assert row[1].startswith("auction_4_items_export_")
     assert row[2] is not None
     assert batch == ("full", 1, "2005")
 
@@ -510,7 +510,7 @@ def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
     text = export_response.data.decode("utf-8")
     assert "2006,Chair,Wood chair,Vintage wear" in text
     assert "2005,Lamp,Brass lamp,Working" not in text
-    batch_files = list(test_env["exports_dir"].glob("auction_items_batch_2006-2006_*.csv"))
+    batch_files = list(test_env["exports_dir"].glob("auction_4_batch_2006-2006_*.csv"))
     assert len(batch_files) == 1
     assert "2006,Chair,Wood chair,Vintage wear" in batch_files[0].read_text(encoding="utf-8")
 
@@ -522,7 +522,7 @@ def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
     assert rows[0] == (2005, "ready", None)
     assert rows[1][0] == 2006
     assert rows[1][1] == "published"
-    assert rows[1][2].startswith("auction_items_batch_2006-2006_")
+    assert rows[1][2].startswith("auction_4_batch_2006-2006_")
 
 
 def test_edit_saved_item_page_loads(test_env, tmp_path, monkeypatch):
@@ -836,39 +836,27 @@ def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_pa
 def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-    archived = test_env["exports_dir"] / "auction_items_batch_2000-2001_20260408.csv"
+    archived = test_env["exports_dir"] / "auction_4_batch_2000-2001_20260408.csv"
     archived.write_text("Lot Number,Lead\n2000,Lamp\n", encoding="utf-8")
     with sqlite3.connect(db_path) as connection:
+        app_module.ensure_item_store_ready()
         connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS export_batches (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT NOT NULL UNIQUE,
-                export_type TEXT NOT NULL,
-                lot_numbers TEXT NOT NULL,
-                lot_count INTEGER NOT NULL,
-                archive_path TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute(
-            """
-            INSERT INTO export_batches (filename, export_type, lot_numbers, lot_count, archive_path)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO export_batches (auction_id, filename, export_type, lot_numbers, lot_count, archive_path)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            ("auction_items_batch_2000-2001_20260408.csv", "selected", "2000,2001", 2, "auction_items_batch_2000-2001_20260408.csv"),
+            (4, "auction_4_batch_2000-2001_20260408.csv", "selected", "2000,2001", 2, "auction_4_batch_2000-2001_20260408.csv"),
         )
         connection.commit()
 
     history_response = test_env["client"].get("/exports")
     assert history_response.status_code == 200
     assert b"Export History" in history_response.data
-    assert b"auction_items_batch_2000-2001_20260408.csv" in history_response.data
+    assert b"auction_4_batch_2000-2001_20260408.csv" in history_response.data
     assert b"selected" in history_response.data
     assert b"2000,2001" in history_response.data
 
-    download_response = test_env["client"].get("/exports/auction_items_batch_2000-2001_20260408.csv")
+    download_response = test_env["client"].get("/exports/auction_4_batch_2000-2001_20260408.csv")
     assert download_response.status_code == 200
     assert download_response.mimetype == "text/csv"
     assert b"2000,Lamp" in download_response.data
@@ -925,7 +913,7 @@ def test_export_batch_details_show_current_lot_statuses(test_env, tmp_path, monk
         follow_redirects=True,
     )
 
-    detail_response = test_env["client"].get("/exports/auction_items_batch_2040-2040_" + __import__("time").strftime("%Y%m%d") + ".csv/details")
+    detail_response = test_env["client"].get("/exports/auction_4_batch_2040-2040_" + __import__("time").strftime("%Y%m%d") + ".csv/details")
 
     assert detail_response.status_code == 200
     assert b"Lots In This Batch" in detail_response.data
@@ -1015,7 +1003,148 @@ def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypat
     assert b"Need Re-Export" in dashboard_response.data
     assert b"Lot 2021: Bottle" in dashboard_response.data
     assert b"Lot 2020: Desk" in dashboard_response.data
-    assert b"auction_items_batch_2021-2021_" in dashboard_response.data
+    assert b"auction_4_batch_2021-2021_" in dashboard_response.data
+
+
+def test_database_bootstraps_current_auction_four(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    response = test_env["client"].get("/")
+
+    assert response.status_code == 200
+    assert b"Current Auction: 4" in response.data
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT id, status, is_current FROM auctions"
+        ).fetchone()
+
+    assert row == (4, "active", 1)
+
+
+def test_create_and_switch_auction_updates_visible_scope(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    create_response = test_env["client"].post(
+        "/auctions/create_next",
+        data={"return_to": "/manage_items"},
+        follow_redirects=True,
+    )
+
+    assert create_response.status_code == 200
+    assert b"Created auction 5 and switched to it." in create_response.data
+    assert b"auction 5" in create_response.data.lower()
+
+    app_module.append_item_record(
+        {
+            "auction_id": "4",
+            "lot_number": "2100",
+            "title": "Auction Four Lamp",
+            "description": "Brass lamp",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "lamp",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2100_lamp",
+        }
+    )
+    app_module.append_item_record(
+        {
+            "auction_id": "5",
+            "lot_number": "2101",
+            "title": "Auction Five Chair",
+            "description": "Wood chair",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "chair",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Furniture",
+            "status": "ready",
+            "image_folder": "2101_chair",
+        }
+    )
+
+    manage_current = test_env["client"].get("/manage_items")
+    assert b"Auction Five Chair" in manage_current.data
+    assert b"Auction Four Lamp" not in manage_current.data
+
+    switch_response = test_env["client"].post(
+        "/auctions/switch",
+        data={"auction_id": "4", "return_to": "/manage_items"},
+        follow_redirects=True,
+    )
+
+    assert switch_response.status_code == 200
+    assert b"Now working in auction 4." in switch_response.data
+    assert b"Auction Four Lamp" in switch_response.data
+    assert b"Auction Five Chair" not in switch_response.data
+
+
+def test_move_saved_item_to_another_auction_resets_publish_state(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
+    test_env["client"].post("/auctions/switch", data={"auction_id": "4", "return_to": "/"})
+
+    app_module.append_item_record(
+        {
+            "auction_id": "4",
+            "lot_number": "2110",
+            "title": "Moved Vase",
+            "description": "Blue vase",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "vase",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "published",
+            "image_folder": "2110_vase",
+            "last_export_batch": "auction_4_batch_2110-2110_20260408.csv",
+            "published_at": "2026-04-08 10:00:00",
+        }
+    )
+
+    move_response = test_env["client"].post(
+        "/items/2110/move",
+        data={"auction_id": "5", "current_filter": "active"},
+        follow_redirects=True,
+    )
+
+    assert move_response.status_code == 200
+    assert b"Moved lot 2110 to auction 5." in move_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT auction_id, status, last_export_batch, published_at FROM auction_items WHERE lot_number = 2110"
+        ).fetchone()
+
+    assert row == (5, "ready", "", None)
 
 
 def test_bulk_remove_and_restore_items(test_env, tmp_path, monkeypatch):
