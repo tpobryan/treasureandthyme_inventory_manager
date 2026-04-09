@@ -436,6 +436,15 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auction_photo_counters (
+                    auction_number TEXT PRIMARY KEY,
+                    last_index INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
         else:
             cursor.execute(
                 """
@@ -489,6 +498,15 @@ def ensure_item_store_ready() -> None:
                     auction_photo_index INT NOT NULL,
                     remote_names TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auction_photo_counters (
+                    auction_number VARCHAR(255) PRIMARY KEY,
+                    last_index INT NOT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -1472,6 +1490,36 @@ def ensure_auction_photo_state() -> None:
 
 
 def get_next_auction_photo_index(auction_number: str) -> int:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        try:
+            cursor = connection.cursor()
+            placeholder = "?" if dialect == "sqlite" else "%s"
+            cursor.execute(
+                f"""
+                SELECT last_index
+                FROM auction_photo_counters
+                WHERE auction_number = {placeholder}
+                """,
+                (str(auction_number),),
+            )
+            row = cursor.fetchone()
+        finally:
+            connection.close()
+
+        if not row:
+            return 1
+        if isinstance(row, sqlite3.Row):
+            current = int(row["last_index"])
+        elif isinstance(row, dict):
+            current = int(row.get("last_index", 0))
+        else:
+            current = int(row[0])
+        return current + 1
+
     ensure_auction_photo_state()
     data = json.loads(AUCTION_PHOTO_STATE_PATH.read_text(encoding="utf-8"))
     current = int(data.get(str(auction_number), 0))
@@ -1480,6 +1528,61 @@ def get_next_auction_photo_index(auction_number: str) -> int:
 
 def reserve_next_auction_photo_index(auction_number: str) -> int:
     with state_lock(AUCTION_PHOTO_LOCK_PATH):
+        if database_enabled():
+            ensure_item_store_ready()
+            connection, dialect = connect_item_store()
+            assert connection is not None
+
+            try:
+                cursor = connection.cursor()
+                placeholder = "?" if dialect == "sqlite" else "%s"
+                cursor.execute(
+                    f"""
+                    SELECT last_index
+                    FROM auction_photo_counters
+                    WHERE auction_number = {placeholder}
+                    """,
+                    (str(auction_number),),
+                )
+                row = cursor.fetchone()
+                current = 0
+                if row:
+                    if isinstance(row, sqlite3.Row):
+                        current = int(row["last_index"])
+                    elif isinstance(row, dict):
+                        current = int(row.get("last_index", 0))
+                    else:
+                        current = int(row[0])
+                next_index = current + 1
+
+                if dialect == "sqlite":
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO auction_photo_counters (
+                            auction_number,
+                            last_index,
+                            updated_at
+                        ) VALUES (?, ?, CURRENT_TIMESTAMP)
+                        """,
+                        (str(auction_number), next_index),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO auction_photo_counters (
+                            auction_number,
+                            last_index
+                        ) VALUES (%s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            last_index = VALUES(last_index)
+                        """,
+                        (str(auction_number), next_index),
+                    )
+                connection.commit()
+                return next_index
+            finally:
+                connection.close()
+
         ensure_auction_photo_state()
         data = json.loads(AUCTION_PHOTO_STATE_PATH.read_text(encoding="utf-8"))
         current = int(data.get(str(auction_number), 0))

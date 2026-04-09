@@ -212,6 +212,24 @@ def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, mon
     assert app_module.get_ftp_upload_record(3056) is None
 
 
+def test_reserve_next_auction_photo_index_in_database(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    assert app_module.get_next_auction_photo_index("12") == 1
+    assert app_module.reserve_next_auction_photo_index("12") == 1
+    assert app_module.get_next_auction_photo_index("12") == 2
+    assert app_module.reserve_next_auction_photo_index("12") == 2
+    assert app_module.get_next_auction_photo_index("99") == 1
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT auction_number, last_index FROM auction_photo_counters ORDER BY auction_number"
+        ).fetchall()
+
+    assert rows == [("12", 2)]
+
+
 def test_delete_remote_upload_without_record_flashes_message(test_env):
     response = test_env["client"].post(
         "/delete_remote_upload",
