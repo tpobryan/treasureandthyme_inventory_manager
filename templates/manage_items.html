@@ -83,6 +83,13 @@
       font-size: 0.94rem;
     }
 
+    .bulk-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
     .filter-row {
       display: flex;
       gap: 8px;
@@ -294,14 +301,12 @@
                 {% for item in items %}
                   <tr>
                     <td>
-                      {% if item['status'] != 'removed' %}
-                        <input
-                          type="checkbox"
-                          name="lot_numbers"
-                          value="{{ item['lot_number'] }}"
-                          {% if item['status'] in ('ready', 'needs_update') %}checked{% endif %}
-                        >
-                      {% endif %}
+                      <input
+                        type="checkbox"
+                        name="lot_numbers"
+                        value="{{ item['lot_number'] }}"
+                        {% if item['status'] in ('ready', 'needs_update') %}checked{% endif %}
+                      >
                     </td>
                     <td>{{ item['lot_number'] }}</td>
                     <td>
@@ -359,7 +364,16 @@
             <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
             <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
           </div>
-          <button type="submit">Download Selected CSV</button>
+          <div class="bulk-row">
+            <select name="bulk_action" aria-label="Bulk action">
+              <option value="">Bulk action...</option>
+              <option value="remove">Remove selected</option>
+              <option value="restore">Restore selected</option>
+              <option value="mark_ready">Mark selected ready</option>
+            </select>
+            <button type="submit" formaction="{{ url_for('bulk_update_items') }}" formmethod="post">Apply</button>
+            <button type="submit">Download Selected CSV</button>
+          </div>
         </div>
       </form>
     </div>

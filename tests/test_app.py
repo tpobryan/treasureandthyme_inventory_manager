@@ -853,3 +853,71 @@ def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypat
     assert b"Lot 2021: Bottle" in dashboard_response.data
     assert b"Lot 2020: Desk" in dashboard_response.data
     assert b"auction_items_batch_2021-2021_" in dashboard_response.data
+
+
+def test_bulk_remove_and_restore_items(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    for lot_number, title in [(2030, "Lamp"), (2031, "Chair")]:
+        app_module.append_item_record(
+            {
+                "lot_number": str(lot_number),
+                "title": title,
+                "description": f"{title} description",
+                "condition_notes": "Good",
+                "low_estimate": "",
+                "high_estimate": "",
+                "dimensions_length": "",
+                "dimensions_depth": "",
+                "dimensions_height": "",
+                "tags": title.lower(),
+                "reference_number": "",
+                "item_notes": "",
+                "consigner_number": "",
+                "shipping_available": "No",
+                "category": "Decorative Arts",
+                "status": "ready",
+                "image_folder": f"{lot_number}_{title.lower()}",
+                "last_export_batch": "",
+                "published_at": "",
+            }
+        )
+
+    remove_response = test_env["client"].post(
+        "/items/bulk_action",
+        data={
+            "current_filter": "active",
+            "bulk_action": "remove",
+            "lot_numbers": ["2030", "2031"],
+        },
+        follow_redirects=True,
+    )
+
+    assert remove_response.status_code == 200
+    assert b"Removed 2 selected lot(s)" in remove_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT lot_number, status FROM auction_items ORDER BY lot_number"
+        ).fetchall()
+    assert rows == [(2030, "removed"), (2031, "removed")]
+
+    restore_response = test_env["client"].post(
+        "/items/bulk_action",
+        data={
+            "current_filter": "removed",
+            "bulk_action": "restore",
+            "lot_numbers": ["2030", "2031"],
+        },
+        follow_redirects=True,
+    )
+
+    assert restore_response.status_code == 200
+    assert b"Restored 2 selected lot(s)." in restore_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT lot_number, status FROM auction_items ORDER BY lot_number"
+        ).fetchall()
+    assert rows == [(2030, "ready"), (2031, "ready")]

@@ -1153,6 +1153,52 @@ def restore_removed_item(lot_number: int) -> str | None:
     return restored_status
 
 
+def set_items_status(lot_numbers: list[int], target_status: str) -> int:
+    if not database_enabled() or not lot_numbers:
+        return 0
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
+        if dialect == "sqlite":
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number IN ({placeholders})
+                """,
+                (target_status, *lot_numbers),
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE auction_items
+                SET
+                    status = %s
+                WHERE lot_number IN ({placeholders})
+                """,
+                (target_status, *lot_numbers),
+            )
+        connection.commit()
+        return int(cursor.rowcount)
+    finally:
+        connection.close()
+
+
+def bulk_restore_items(lot_numbers: list[int]) -> int:
+    restored = 0
+    for lot_number in lot_numbers:
+        if restore_removed_item(lot_number):
+            restored += 1
+    return restored
+
+
 def fetch_export_rows_for_lots(lot_numbers: list[int]) -> list[list[str]]:
     if not lot_numbers:
         return []
@@ -1893,6 +1939,47 @@ def restore_saved_item(lot_number: int):
         flash(f"Restored lot {lot_number} to ready.")
     else:
         flash(f"Lot {lot_number} could not be restored.")
+    return redirect(url_for("manage_items", status=current_filter))
+
+
+@app.route("/items/bulk_action", methods=["POST"])
+def bulk_update_items():
+    if not database_enabled():
+        flash("Saved item management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
+    selected_lots = sorted(
+        {
+            int(value)
+            for value in request.form.getlist("lot_numbers")
+            if str(value).isdigit()
+        }
+    )
+    action = request.form.get("bulk_action", "").strip().lower()
+
+    if not selected_lots:
+        flash("Select at least one lot for a bulk action.")
+        return redirect(url_for("manage_items", status=current_filter))
+
+    if action == "remove":
+        changed = 0
+        for lot_number in selected_lots:
+            changed += 1 if mark_item_removed(lot_number) else 0
+        flash(f"Removed {changed} selected lot(s) from future exports.")
+        return redirect(url_for("manage_items", status=current_filter))
+
+    if action == "restore":
+        restored = bulk_restore_items(selected_lots)
+        flash(f"Restored {restored} selected lot(s).")
+        return redirect(url_for("manage_items", status=current_filter))
+
+    if action == "mark_ready":
+        changed = set_items_status(selected_lots, ITEM_STATUS_READY)
+        flash(f"Marked {changed} selected lot(s) as ready.")
+        return redirect(url_for("manage_items", status=current_filter))
+
+    flash("Choose a valid bulk action.")
     return redirect(url_for("manage_items", status=current_filter))
 
 
