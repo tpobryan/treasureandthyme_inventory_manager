@@ -1872,6 +1872,75 @@ def list_export_archives() -> list[dict[str, str]]:
     return archives
 
 
+def fetch_export_batch(filename: str) -> dict[str, str] | None:
+    if not database_enabled():
+        return None
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT filename, export_type, lot_numbers, lot_count, archive_path, created_at
+            FROM export_batches
+            WHERE filename = {placeholder}
+            """,
+            (filename,),
+        )
+        record = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if not record:
+        return None
+
+    if isinstance(record, sqlite3.Row):
+        return {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+    if isinstance(record, dict):
+        return {key: "" if value is None else str(value) for key, value in record.items()}
+    return None
+
+
+def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
+    if not database_enabled() or not lot_numbers:
+        return []
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
+        cursor.execute(
+            f"""
+            SELECT lot_number, title, status, category, last_export_batch, updated_at, published_at
+            FROM auction_items
+            WHERE lot_number IN ({placeholders})
+            ORDER BY lot_number
+            """,
+            tuple(lot_numbers),
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    items: list[dict[str, str]] = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            row = {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+        elif isinstance(record, dict):
+            row = {key: "" if value is None else str(value) for key, value in record.items()}
+        else:
+            continue
+        items.append(row)
+    return items
+
+
 @app.route("/", methods=["GET"])
 def index():
     active_draft = get_active_draft()
@@ -1957,6 +2026,27 @@ def export_history():
     return render_template(
         "export_history.html",
         archives=list_export_archives(),
+    )
+
+
+@app.route("/exports/<path:filename>/details", methods=["GET"])
+def export_batch_details(filename: str):
+    if not database_enabled():
+        flash("Export history is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    safe_name = Path(filename).name
+    batch = fetch_export_batch(safe_name)
+    if not batch:
+        flash("That export batch was not found.")
+        return redirect(url_for("export_history"))
+
+    lot_numbers = [int(value) for value in batch.get("lot_numbers", "").split(",") if value.isdigit()]
+    items = fetch_items_for_lot_numbers(lot_numbers)
+    return render_template(
+        "export_batch_details.html",
+        batch=batch,
+        items=items,
     )
 
 

@@ -153,7 +153,12 @@
                 <td>{{ archive['lot_count'] }}{% if archive['lot_numbers'] %}<br><span style="color:#6b7280; font-size:0.9rem;">{{ archive['lot_numbers'] }}</span>{% endif %}</td>
                 <td>{{ archive['modified_at'] }}</td>
                 <td>{{ archive['size_bytes'] }} bytes</td>
-                <td><a class="button-link secondary" href="{{ url_for('download_export_archive', filename=archive['filename']) }}">Download</a></td>
+                <td>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <a class="button-link secondary" href="{{ url_for('export_batch_details', filename=archive['filename']) }}">Details</a>
+                    <a class="button-link secondary" href="{{ url_for('download_export_archive', filename=archive['filename']) }}">Download</a>
+                  </div>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

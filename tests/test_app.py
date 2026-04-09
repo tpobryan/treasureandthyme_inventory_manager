@@ -799,6 +799,66 @@ def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeyp
     assert b"2000,Lamp" in download_response.data
 
 
+def test_export_batch_details_show_current_lot_statuses(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.append_item_record(
+        {
+            "lot_number": "2040",
+            "title": "Lantern",
+            "description": "Metal lantern",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "lantern",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2040_lantern",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+
+    test_env["client"].post("/export_selected_csv", data={"lot_numbers": ["2040"], "current_filter": "active"})
+    test_env["client"].post(
+        "/items/2040/update",
+        data={
+            "Title": "Lantern",
+            "Description": "Metal lantern with glass panels",
+            "Condition Summary": "Good",
+            "Keywords": "lantern",
+            "Category": "Decorative Arts",
+            "Low Estimate ($)": "",
+            "High Estimate ($)": "",
+            "Dimensions - Length": "",
+            "Dimensions - Depth": "",
+            "Dimensions - Height": "",
+            "Reference #": "",
+            "Item Notes": "",
+            "Consigner #": "",
+            "Shipping Available": "No",
+            "current_filter": "active",
+        },
+        follow_redirects=True,
+    )
+
+    detail_response = test_env["client"].get("/exports/auction_items_batch_2040-2040_" + __import__("time").strftime("%Y%m%d") + ".csv/details")
+
+    assert detail_response.status_code == 200
+    assert b"Lots In This Batch" in detail_response.data
+    assert b"2040" in detail_response.data
+    assert b"Lantern" in detail_response.data
+    assert b"needs_update" in detail_response.data
+
+
 def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")

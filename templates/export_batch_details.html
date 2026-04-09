@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Export Batch Details</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --border: #d9deea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --radius: 14px;
+      --ready-bg: #ecfdf5;
+      --ready-text: #166534;
+      --published-bg: #eff6ff;
+      --published-text: #1d4ed8;
+      --update-bg: #fff7ed;
+      --update-text: #c2410c;
+      --removed-bg: #fef2f2;
+      --removed-text: #991b1b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+      margin-bottom: 18px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .button-link {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .button-link:hover { background: var(--accent-hover); }
+    .button-link.secondary { background: #e5e7eb; color: #111827; }
+    .button-link.secondary:hover { background: #d1d5db; }
+    h1 { margin: 0 0 8px; font-size: 1.7rem; }
+    .sub { margin: 0; color: var(--muted); font-size: 0.98rem; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .meta-card {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fafafa;
+    }
+    .meta-label { font-weight: 700; margin-bottom: 6px; }
+    .meta-value { color: var(--muted); word-break: break-word; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      background: #f8fafc;
+      color: #334155;
+      font-size: 0.92rem;
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .status-ready { background: var(--ready-bg); color: var(--ready-text); }
+    .status-published { background: var(--published-bg); color: var(--published-text); }
+    .status-needs-update { background: var(--update-bg); color: var(--update-text); }
+    .status-removed { background: var(--removed-bg); color: var(--removed-text); }
+    .empty { color: var(--muted); padding: 16px 0; }
+    @media (max-width: 900px) {
+      .meta-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .meta-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="toolbar">
+        <a class="button-link secondary" href="{{ url_for('export_history') }}">Back to Export History</a>
+        <a class="button-link secondary" href="{{ url_for('download_export_archive', filename=batch['filename']) }}">Download CSV</a>
+      </div>
+
+      <h1>{{ batch['filename'] }}</h1>
+      <p class="sub">Batch type {{ batch['export_type'] }} created {{ batch['created_at'] }}.</p>
+
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="meta-label">Lots In Batch</div>
+          <div class="meta-value">{{ batch['lot_count'] }}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Lot Numbers</div>
+          <div class="meta-value">{{ batch['lot_numbers'] }}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Archive File</div>
+          <div class="meta-value">{{ batch['archive_path'] }}</div>
+        </div>
+        <div class="meta-card">
+          <div class="meta-label">Type</div>
+          <div class="meta-value">{{ batch['export_type'] }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1 style="font-size:1.2rem;">Lots In This Batch</h1>
+      {% if items %}
+        <table>
+          <thead>
+            <tr>
+              <th>Lot</th>
+              <th>Title</th>
+              <th>Status Now</th>
+              <th>Category</th>
+              <th>Last Export</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td>{{ item['lot_number'] }}</td>
+                <td>{{ item['title'] }}</td>
+                <td><span class="status-pill status-{{ item['status'].replace('_', '-') }}">{{ item['status'] }}</span></td>
+                <td>{{ item['category'] }}</td>
+                <td>{{ item['last_export_batch'] or 'Not exported again yet' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty">No lot details were found for this export batch.</div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
