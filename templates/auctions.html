@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auctions</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --border: #d9deea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.8rem;
+      line-height: 1.2;
+    }
+
+    .sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    .flash {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      font-size: 0.96rem;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .button-link,
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .button-link:hover,
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    .secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .secondary:hover {
+      background: #d1d5db;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fafc;
+      font-size: 0.92rem;
+      color: #334155;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+
+    .current-pill {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #dcfce7;
+      color: #166534;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .count-row {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .inline-form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 0;
+    }
+
+    select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      font: inherit;
+    }
+
+    .empty {
+      padding: 20px;
+      color: var(--muted);
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Auctions</h1>
+      <p class="sub">Create the next auction, switch your working context, and keep the status of each auction clear as lots move through prep and publishing.</p>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="flash">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <a class="button-link secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+          <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
+        </div>
+        <div class="toolbar-right">
+          <form class="inline-form" action="{{ url_for('create_auction_route') }}" method="post">
+            <input type="hidden" name="return_to" value="{{ url_for('auctions_overview') }}">
+            <button type="submit">Create Next Auction</button>
+          </form>
+        </div>
+      </div>
+
+      {% if auctions %}
+        <table>
+          <thead>
+            <tr>
+              <th>Auction</th>
+              <th>Status</th>
+              <th>Lots</th>
+              <th>Exports</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for auction in auctions %}
+              <tr>
+                <td>
+                  <strong>Auction {{ auction.id }}</strong>
+                  {% if auction.is_current == '1' %}
+                    <span class="current-pill">Current</span>
+                  {% endif %}
+                </td>
+                <td><span class="status-pill">{{ auction.status }}</span></td>
+                <td>
+                  <div class="count-row">
+                    {{ auction.total_count }} total
+                    <br>Ready: {{ auction.ready_count }}
+                    <br>Needs Update: {{ auction.needs_update_count }}
+                    <br>Published: {{ auction.published_count }}
+                    <br>Removed: {{ auction.removed_count }}
+                  </div>
+                </td>
+                <td>{{ auction.export_count }}</td>
+                <td>{{ auction.updated_at }}</td>
+                <td>
+                  <div class="inline-form" style="margin-bottom:8px;">
+                    <form class="inline-form" action="{{ url_for('switch_auction_route') }}" method="post">
+                      <input type="hidden" name="return_to" value="{{ url_for('auctions_overview') }}">
+                      <input type="hidden" name="auction_id" value="{{ auction.id }}">
+                      <button type="submit" class="secondary">Work In This Auction</button>
+                    </form>
+                  </div>
+                  <form class="inline-form" action="{{ url_for('update_auction_status_route') }}" method="post">
+                    <input type="hidden" name="return_to" value="{{ url_for('auctions_overview') }}">
+                    <input type="hidden" name="auction_id" value="{{ auction.id }}">
+                    <select name="status" aria-label="Auction status">
+                      {% for status in auction_statuses %}
+                        <option value="{{ status }}" {% if auction.status == status %}selected{% endif %}>{{ status|capitalize }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="submit" class="secondary">Update</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty">No auctions were found yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

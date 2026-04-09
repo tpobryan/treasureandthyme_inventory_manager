@@ -571,6 +571,7 @@
           <button type="submit" id="analyzeButton">Analyze</button>
           <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download Auction {{ current_auction.id if current_auction else '' }} CSV</a>
           {% if database_enabled %}
+            <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
             <a class="button-link secondary" href="{{ url_for('dashboard') }}">Auction Dashboard</a>
             <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>
             <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>

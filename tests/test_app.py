@@ -1098,6 +1098,69 @@ def test_create_and_switch_auction_updates_visible_scope(test_env, tmp_path, mon
     assert b"Auction Five Chair" not in switch_response.data
 
 
+def test_auctions_overview_shows_statuses_and_counts(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
+
+    app_module.append_item_record(
+        {
+            "auction_id": "4",
+            "lot_number": "2105",
+            "title": "Auction Four Bottle",
+            "description": "Glass bottle",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "bottle",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "ready",
+            "image_folder": "2105_bottle",
+        }
+    )
+    app_module.append_item_record(
+        {
+            "auction_id": "5",
+            "lot_number": "2106",
+            "title": "Auction Five Frame",
+            "description": "Wood frame",
+            "condition_notes": "Good",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "frame",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Decorative Arts",
+            "status": "published",
+            "image_folder": "2106_frame",
+            "last_export_batch": "auction_5_batch_2106-2106_20260408.csv",
+            "published_at": "2026-04-08 10:00:00",
+        }
+    )
+
+    response = test_env["client"].get("/auctions")
+
+    assert response.status_code == 200
+    assert b"Auction 5" in response.data
+    assert b"Auction 4" in response.data
+    assert b"Current" in response.data
+    assert b"Published: 1" in response.data
+    assert b"Ready: 1" in response.data
+
+
 def test_move_saved_item_to_another_auction_resets_publish_state(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")

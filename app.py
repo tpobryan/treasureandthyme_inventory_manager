@@ -959,6 +959,85 @@ def list_auctions() -> list[dict[str, str]]:
     return auctions
 
 
+def fetch_auction_summaries() -> list[dict[str, str]]:
+    if not database_enabled():
+        return []
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, status, is_current, created_at, updated_at
+            FROM auctions
+            ORDER BY id DESC
+            """
+        )
+        auctions = cursor.fetchall()
+
+        summaries: list[dict[str, str]] = []
+        placeholder = "?" if dialect == "sqlite" else "%s"
+
+        for auction in auctions:
+            if isinstance(auction, sqlite3.Row):
+                row = {key: "" if auction[key] is None else str(auction[key]) for key in auction.keys()}
+            elif isinstance(auction, dict):
+                row = {key: "" if value is None else str(value) for key, value in auction.items()}
+            else:
+                continue
+
+            auction_id = int(row["id"])
+            cursor.execute(
+                f"""
+                SELECT status, COUNT(*) AS item_count
+                FROM auction_items
+                WHERE auction_id = {placeholder}
+                GROUP BY status
+                """,
+                (auction_id,),
+            )
+            item_counts = {
+                ITEM_STATUS_READY: 0,
+                ITEM_STATUS_PUBLISHED: 0,
+                ITEM_STATUS_NEEDS_UPDATE: 0,
+                ITEM_STATUS_REMOVED: 0,
+            }
+            for item_row in cursor.fetchall():
+                status = str(_extract_row_value(item_row, "status", 0, ""))
+                count = int(_extract_row_value(item_row, "item_count", 1, 0) or 0)
+                if status in item_counts:
+                    item_counts[status] = count
+
+            cursor.execute(
+                f"""
+                SELECT COUNT(*) AS export_count
+                FROM export_batches
+                WHERE auction_id = {placeholder}
+                """,
+                (auction_id,),
+            )
+            export_count = int(_extract_row_value(cursor.fetchone(), "export_count", 0, 0) or 0)
+
+            summaries.append(
+                {
+                    **row,
+                    "ready_count": str(item_counts[ITEM_STATUS_READY]),
+                    "published_count": str(item_counts[ITEM_STATUS_PUBLISHED]),
+                    "needs_update_count": str(item_counts[ITEM_STATUS_NEEDS_UPDATE]),
+                    "removed_count": str(item_counts[ITEM_STATUS_REMOVED]),
+                    "total_count": str(sum(item_counts.values())),
+                    "export_count": str(export_count),
+                }
+            )
+
+        return summaries
+    finally:
+        connection.close()
+
+
 def create_next_auction() -> dict[str, str]:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
@@ -2914,6 +2993,18 @@ def dashboard():
         recent_exports=list_export_archives()[:5],
         needs_update_items=fetch_dashboard_items([ITEM_STATUS_NEEDS_UPDATE], limit=5),
         ready_items=fetch_dashboard_items([ITEM_STATUS_READY], limit=5),
+    )
+
+
+@app.route("/auctions", methods=["GET"])
+def auctions_overview():
+    if not database_enabled():
+        flash("Auction management is available when DATABASE_URL is configured.")
+        return redirect(url_for("index"))
+
+    return render_template(
+        "auctions.html",
+        auctions=fetch_auction_summaries(),
     )
 
 
