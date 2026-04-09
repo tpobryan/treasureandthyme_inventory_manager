@@ -551,9 +551,18 @@ def connect_item_store():
     scheme = parsed.scheme.lower()
 
     if scheme.startswith("sqlite"):
-        db_path = unquote(parsed.path or "")
+        if database_url.startswith("sqlite:///"):
+            db_path = unquote(database_url[10:])
+        else:
+            db_path = unquote(parsed.netloc + parsed.path)
+
         if not db_path:
             raise ValueError("DATABASE_URL sqlite path is missing.")
+
+        db_file = Path(db_path)
+        if db_file.parent and str(db_file.parent) != ".":
+            db_file.parent.mkdir(parents=True, exist_ok=True)
+
         connection = sqlite3.connect(db_path)
         connection.row_factory = sqlite3.Row
         return connection, "sqlite"

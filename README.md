@@ -53,6 +53,12 @@ APP_LOGIN_PASSWORD=
 
 Optional database setting if you want to store saved items outside the local CSV:
 
+**For SQLite (Easiest for local or Raspberry Pi use):**
+```env
+DATABASE_URL=sqlite:///data/auction_items.db
+```
+
+**For MySQL (Good for a VPS):**
 ```env
 DATABASE_URL=mysql://username:password@127.0.0.1:3306/auctionninja_local_app
 ```
