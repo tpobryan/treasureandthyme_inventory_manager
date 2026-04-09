@@ -442,6 +442,13 @@
               <option value="remove">Remove selected</option>
               <option value="restore">Restore selected</option>
               <option value="mark_ready">Mark selected ready</option>
+              <option value="move">Move selected to another auction</option>
+            </select>
+            <select name="target_auction_id" aria-label="Target auction">
+              <option value="">Move to auction...</option>
+              {% for auction in auction_list %}
+                <option value="{{ auction.id }}">Auction {{ auction.id }} · {{ auction.status }}</option>
+              {% endfor %}
             </select>
             <button type="submit" formaction="{{ url_for('bulk_update_items') }}" formmethod="post">Apply</button>
             <button type="submit">Download Selected CSV</button>

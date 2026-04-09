@@ -1276,3 +1276,61 @@ def test_bulk_remove_and_restore_items(test_env, tmp_path, monkeypatch):
             "SELECT lot_number, status FROM auction_items ORDER BY lot_number"
         ).fetchall()
     assert rows == [(2030, "ready"), (2031, "ready")]
+
+
+def test_bulk_move_items_to_another_auction(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
+    test_env["client"].post("/auctions/switch", data={"auction_id": "4", "return_to": "/"})
+
+    for lot_number, title in [(2120, "Bench"), (2121, "Basket")]:
+        app_module.append_item_record(
+            {
+                "auction_id": "4",
+                "lot_number": str(lot_number),
+                "title": title,
+                "description": f"{title} description",
+                "condition_notes": "Good",
+                "low_estimate": "",
+                "high_estimate": "",
+                "dimensions_length": "",
+                "dimensions_depth": "",
+                "dimensions_height": "",
+                "tags": title.lower(),
+                "reference_number": "",
+                "item_notes": "",
+                "consigner_number": "",
+                "shipping_available": "No",
+                "category": "Decorative Arts",
+                "status": "published",
+                "image_folder": f"{lot_number}_{title.lower()}",
+                "last_export_batch": "auction_4_batch.csv",
+                "published_at": "2026-04-08 10:00:00",
+            }
+        )
+
+    move_response = test_env["client"].post(
+        "/items/bulk_action",
+        data={
+            "current_filter": "active",
+            "bulk_action": "move",
+            "target_auction_id": "5",
+            "lot_numbers": ["2120", "2121"],
+        },
+        follow_redirects=True,
+    )
+
+    assert move_response.status_code == 200
+    assert b"Moved 2 selected lot(s) to auction 5." in move_response.data
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT lot_number, auction_id, status, last_export_batch, published_at FROM auction_items ORDER BY lot_number"
+        ).fetchall()
+
+    assert rows == [
+        (2120, 5, "ready", "", None),
+        (2121, 5, "ready", "", None),
+    ]

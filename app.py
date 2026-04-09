@@ -3271,6 +3271,21 @@ def bulk_update_items():
         flash(f"Marked {changed} selected lot(s) as ready.")
         return redirect(url_for("manage_items", status=current_filter))
 
+    if action == "move":
+        target_auction_id = request.form.get("target_auction_id", "").strip()
+        if not target_auction_id.isdigit():
+            flash("Choose a destination auction for the move action.")
+            return redirect(url_for("manage_items", status=current_filter))
+
+        moved = 0
+        for lot_number in selected_lots:
+            moved += 1 if move_item_to_auction(lot_number, int(target_auction_id)) else 0
+        flash(
+            f"Moved {moved} selected lot(s) to auction {target_auction_id}. "
+            "Their publish state was reset for review in the new auction."
+        )
+        return redirect(url_for("manage_items", status=current_filter))
+
     flash("Choose a valid bulk action.")
     return redirect(url_for("manage_items", status=current_filter))
 
