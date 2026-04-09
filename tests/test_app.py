@@ -51,6 +51,8 @@ def test_env(tmp_path, monkeypatch):
     monkeypatch.setenv("FTP_USERNAME", "")
     monkeypatch.setenv("FTP_PASSWORD", "")
     monkeypatch.setenv("FTP_TLS", "false")
+    monkeypatch.setenv("APP_LOGIN_USERNAME", "")
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "")
 
     yield {
         "client": app_module.app.test_client(),
@@ -96,6 +98,37 @@ def test_validate_save_form_rejects_non_numeric_estimates():
 
     assert "Low Estimate ($) must be a number if provided." in errors
     assert "High Estimate ($) must be a number if provided." not in errors
+
+
+def test_login_redirects_when_auth_is_enabled(test_env, monkeypatch):
+    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+
+    response = test_env["client"].get("/", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch):
+    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+
+    bad_login = test_env["client"].post(
+        "/login",
+        data={"username": "owner", "password": "wrong", "next": "/"},
+        follow_redirects=True,
+    )
+    assert b"Login failed" in bad_login.data
+
+    good_login = test_env["client"].post(
+        "/login",
+        data={"username": "owner", "password": "secret", "next": "/"},
+        follow_redirects=True,
+    )
+    assert good_login.status_code == 200
+    assert b"Signed in." in good_login.data
+    assert b"AuctionNinja Listing Generator" in good_login.data
 
 
 def test_save_with_invalid_data_does_not_write_csv(test_env):

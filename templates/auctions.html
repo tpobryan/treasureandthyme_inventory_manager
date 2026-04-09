@@ -207,6 +207,11 @@
         <div class="toolbar-left">
           <a class="button-link secondary" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
           <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
+          {% if auth_enabled and is_authenticated %}
+            <form class="inline-form" action="{{ url_for('logout') }}" method="post">
+              <button type="submit" class="secondary">Sign Out</button>
+            </form>
+          {% endif %}
         </div>
         <div class="toolbar-right">
           <form class="inline-form" action="{{ url_for('create_auction_route') }}" method="post">

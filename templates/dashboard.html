@@ -246,6 +246,11 @@
         <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
         <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Items</a>
         <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
+        {% if auth_enabled and is_authenticated %}
+          <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
+            <button type="submit" class="button-link secondary">Sign Out</button>
+          </form>
+        {% endif %}
       </div>
     </div>
 

@@ -24,6 +24,7 @@ from flask import (
     request,
     send_file,
     send_from_directory,
+    session,
     url_for,
 )
 from werkzeug.utils import secure_filename
@@ -470,6 +471,22 @@ def state_lock(lock_path: Path, timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
 
 def get_database_url() -> str:
     return os.getenv("DATABASE_URL", "").strip()
+
+
+def auth_enabled() -> bool:
+    return bool(os.getenv("APP_LOGIN_PASSWORD", "").strip())
+
+
+def auth_username() -> str:
+    return os.getenv("APP_LOGIN_USERNAME", "admin").strip() or "admin"
+
+
+def auth_password() -> str:
+    return os.getenv("APP_LOGIN_PASSWORD", "").strip()
+
+
+def is_authenticated() -> bool:
+    return bool(session.get("authenticated"))
 
 
 def database_enabled() -> bool:
@@ -2906,6 +2923,25 @@ def current_auction_number_for_upload() -> str:
     return os.getenv("AUCTION_NUMBER", "").strip()
 
 
+@app.before_request
+def require_login_when_configured():
+    if not auth_enabled():
+        return None
+
+    allowed_endpoints = {
+        "login",
+        "logout",
+        "static",
+    }
+    if request.endpoint in allowed_endpoints:
+        return None
+
+    if is_authenticated():
+        return None
+
+    return redirect(url_for("login", next=request.path))
+
+
 @app.context_processor
 def inject_auction_context() -> dict[str, Any]:
     if not database_enabled():
@@ -2913,6 +2949,8 @@ def inject_auction_context() -> dict[str, Any]:
             "current_auction": None,
             "auction_list": [],
             "auction_statuses": [],
+            "auth_enabled": auth_enabled(),
+            "is_authenticated": is_authenticated(),
         }
 
     return {
@@ -2923,6 +2961,8 @@ def inject_auction_context() -> dict[str, Any]:
             AUCTION_STATUS_ACTIVE,
             AUCTION_STATUS_COMPLETED,
         ],
+        "auth_enabled": auth_enabled(),
+        "is_authenticated": is_authenticated(),
     }
 
 
@@ -2966,6 +3006,32 @@ def update_auction_status_route():
 
     flash(f"Auction {auction_id} is now marked {status}.")
     return redirect(request.form.get("return_to") or url_for("dashboard"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not auth_enabled():
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        next_url = request.form.get("next", "").strip()
+        if username == auth_username() and password == auth_password():
+            session["authenticated"] = True
+            flash("Signed in.")
+            return redirect(next_url or url_for("index"))
+        flash("Login failed. Check the username and password.")
+
+    next_url = request.values.get("next", "").strip()
+    return render_template("login.html", next_url=next_url, username=auth_username())
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.pop("authenticated", None)
+    flash("Signed out.")
+    return redirect(url_for("login"))
 
 
 @app.route("/", methods=["GET"])
