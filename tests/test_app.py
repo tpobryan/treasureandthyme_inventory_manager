@@ -280,6 +280,33 @@ def test_discard_draft_removes_folder_and_state(test_env):
     assert app_module.get_active_draft() is None
 
 
+def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    draft_dir = test_env["uploads_dir"] / "draftdb"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "photo.jpg").write_bytes(b"fake image")
+
+    app_module.set_active_draft(
+        temp_id="draftdb",
+        seller_notes="Seller note",
+        options=[{"rank": 1, "title": "Draft title"}],
+        form={"Title": "Draft title"},
+    )
+
+    active = app_module.get_active_draft()
+
+    assert active is not None
+    assert active["temp_id"] == "draftdb"
+    assert active["seller_notes"] == "Seller note"
+    assert active["image_count"] == 1
+
+    app_module.clear_active_draft(temp_id="draftdb")
+
+    assert app_module.get_active_draft() is None
+
+
 def test_dashboard_requires_database(test_env):
     response = test_env["client"].get("/dashboard", follow_redirects=True)
 

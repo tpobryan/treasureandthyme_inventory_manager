@@ -152,6 +152,9 @@ def render_edit_page(
 
 
 def ensure_active_draft_state() -> None:
+    if database_enabled():
+        ensure_item_store_ready()
+        return
     if not ACTIVE_DRAFT_STATE_PATH.exists():
         ACTIVE_DRAFT_STATE_PATH.write_text("{}", encoding="utf-8")
 
@@ -163,6 +166,56 @@ def set_active_draft(
     form: dict[str, str],
     revision_request: str = "",
 ) -> None:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        options_json = json.dumps(options)
+        form_json = json.dumps(form)
+
+        try:
+            cursor = connection.cursor()
+            if dialect == "sqlite":
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO active_drafts (
+                        slot_name,
+                        temp_id,
+                        seller_notes,
+                        options_json,
+                        form_json,
+                        revision_request,
+                        updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    ("default", temp_id, seller_notes, options_json, form_json, revision_request),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO active_drafts (
+                        slot_name,
+                        temp_id,
+                        seller_notes,
+                        options_json,
+                        form_json,
+                        revision_request
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        temp_id = VALUES(temp_id),
+                        seller_notes = VALUES(seller_notes),
+                        options_json = VALUES(options_json),
+                        form_json = VALUES(form_json),
+                        revision_request = VALUES(revision_request)
+                    """,
+                    ("default", temp_id, seller_notes, options_json, form_json, revision_request),
+                )
+            connection.commit()
+        finally:
+            connection.close()
+        return
+
     with state_lock(ACTIVE_DRAFT_STATE_LOCK_PATH):
         ensure_active_draft_state()
         payload = {
@@ -176,6 +229,39 @@ def set_active_draft(
 
 
 def clear_active_draft(temp_id: str | None = None) -> None:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        try:
+            cursor = connection.cursor()
+            placeholder = "?" if dialect == "sqlite" else "%s"
+            if temp_id:
+                cursor.execute(
+                    f"SELECT temp_id FROM active_drafts WHERE slot_name = {placeholder}",
+                    ("default",),
+                )
+                record = cursor.fetchone()
+                current_temp_id = ""
+                if record:
+                    if isinstance(record, sqlite3.Row):
+                        current_temp_id = str(record["temp_id"])
+                    elif isinstance(record, dict):
+                        current_temp_id = str(record.get("temp_id", ""))
+                    else:
+                        current_temp_id = str(record[0])
+                if current_temp_id != temp_id:
+                    return
+            cursor.execute(
+                f"DELETE FROM active_drafts WHERE slot_name = {placeholder}",
+                ("default",),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        return
+
     with state_lock(ACTIVE_DRAFT_STATE_LOCK_PATH):
         ensure_active_draft_state()
         try:
@@ -190,6 +276,66 @@ def clear_active_draft(temp_id: str | None = None) -> None:
 
 
 def get_active_draft() -> dict[str, Any] | None:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        try:
+            cursor = connection.cursor()
+            placeholder = "?" if dialect == "sqlite" else "%s"
+            cursor.execute(
+                f"""
+                SELECT temp_id, seller_notes, options_json, form_json, revision_request
+                FROM active_drafts
+                WHERE slot_name = {placeholder}
+                """,
+                ("default",),
+            )
+            record = cursor.fetchone()
+        finally:
+            connection.close()
+
+        if not record:
+            return None
+
+        if isinstance(record, sqlite3.Row):
+            raw = {key: record[key] for key in record.keys()}
+        elif isinstance(record, dict):
+            raw = dict(record)
+        else:
+            return None
+
+        temp_id = str(raw.get("temp_id", "")).strip()
+        if not temp_id:
+            return None
+
+        try:
+            options = json.loads(str(raw.get("options_json", "[]")))
+            form = json.loads(str(raw.get("form_json", "{}")))
+        except json.JSONDecodeError:
+            clear_active_draft(temp_id=temp_id)
+            return None
+
+        if not isinstance(options, list) or not isinstance(form, dict):
+            clear_active_draft(temp_id=temp_id)
+            return None
+
+        saved_files = load_saved_files_for_temp_id(temp_id)
+        if not saved_files:
+            clear_active_draft(temp_id=temp_id)
+            return None
+
+        return {
+            "temp_id": temp_id,
+            "seller_notes": str(raw.get("seller_notes", "")).strip(),
+            "options": options,
+            "form": form,
+            "revision_request": str(raw.get("revision_request", "")).strip(),
+            "image_files": [p.name for p in saved_files],
+            "image_count": len(saved_files),
+        }
+
     ensure_active_draft_state()
     try:
         data = json.loads(ACTIVE_DRAFT_STATE_PATH.read_text(encoding="utf-8"))
@@ -445,6 +591,19 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS active_drafts (
+                    slot_name TEXT PRIMARY KEY,
+                    temp_id TEXT NOT NULL,
+                    seller_notes TEXT NOT NULL,
+                    options_json TEXT NOT NULL,
+                    form_json TEXT NOT NULL,
+                    revision_request TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
         else:
             cursor.execute(
                 """
@@ -506,6 +665,19 @@ def ensure_item_store_ready() -> None:
                 CREATE TABLE IF NOT EXISTS auction_photo_counters (
                     auction_number VARCHAR(255) PRIMARY KEY,
                     last_index INT NOT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS active_drafts (
+                    slot_name VARCHAR(64) PRIMARY KEY,
+                    temp_id VARCHAR(255) NOT NULL,
+                    seller_notes TEXT NOT NULL,
+                    options_json LONGTEXT NOT NULL,
+                    form_json LONGTEXT NOT NULL,
+                    revision_request TEXT NOT NULL,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
                 """
