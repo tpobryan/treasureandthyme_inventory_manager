@@ -2929,6 +2929,7 @@ def require_login_when_configured():
         return None
 
     allowed_endpoints = {
+        "healthz",
         "login",
         "logout",
         "static",
@@ -2940,6 +2941,11 @@ def require_login_when_configured():
         return None
 
     return redirect(url_for("login", next=request.path))
+
+
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    return Response("ok\n", mimetype="text/plain")
 
 
 @app.context_processor

@@ -142,17 +142,66 @@ The CSV is no longer the source of truth in database mode. Instead:
 - you generate a fresh CSV export per batch or per auction when needed
 - the app archives those exported CSV files under `data/exports`
 
-## Render starter notes
+## VPS deployment notes
 
-This repo now includes a basic `render.yaml` you can use as a starting point for an always-on deployment.
+For this app, a VPS is a strong fit because:
 
-Recommended setup on Render:
+- Waitress can run as a simple systemd service
+- nginx can reverse-proxy it cleanly
+- local photo folders under `data/uploads/` remain straightforward
+- you can keep using your MySQL database
 
-- use a web service
-- mount a persistent disk to `/opt/render/project/src/data`
-- set `DATABASE_URL` to a managed MySQL or Postgres instance you control
-- set `APP_LOGIN_PASSWORD` before exposing the app publicly
-- use the built-in Waitress start command from `render.yaml`
+This repo now includes starter files for that setup:
+
+- [`deploy/systemd/auctionninja.service.example`](/Users/tobryan/ny5and10/auctionninja_local_app/auctionninja_local_app/deploy/systemd/auctionninja.service.example)
+- [`deploy/nginx/auctionninja.conf.example`](/Users/tobryan/ny5and10/auctionninja_local_app/auctionninja_local_app/deploy/nginx/auctionninja.conf.example)
+
+Suggested VPS stack:
+
+- Ubuntu or Debian VPS
+- nginx
+- Python virtualenv
+- Waitress bound to `127.0.0.1:5000`
+- MySQL database
+- HTTPS from Let's Encrypt
+
+High-level setup:
+
+1. Clone the repo to a path like `/opt/auctionninja_local_app`
+2. Create a virtualenv and run `pip install -r requirements.txt`
+3. Copy `.env.example` to `.env` and fill in:
+   - `OPENAI_API_KEY`
+   - `FLASK_SECRET_KEY`
+   - `DATABASE_URL`
+   - `APP_LOGIN_PASSWORD`
+   - FTP settings if you use AuctionNinja photo upload
+4. Copy the systemd example into `/etc/systemd/system/auctionninja.service`
+5. Copy the nginx example into `/etc/nginx/sites-available/auctionninja`
+6. Enable the nginx site and systemd service
+7. Add HTTPS with Certbot
+
+Example commands:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable auctionninja.service
+sudo systemctl start auctionninja.service
+sudo systemctl status auctionninja.service
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/auctionninja /etc/nginx/sites-enabled/auctionninja
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+The app now exposes a simple health endpoint:
+
+```text
+/healthz
+```
+
+That endpoint stays available even when login protection is enabled, which is useful for nginx, uptime checks, or a load balancer.
 
 ## Run tests
 

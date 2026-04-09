@@ -131,6 +131,16 @@ def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch)
     assert b"AuctionNinja Listing Generator" in good_login.data
 
 
+def test_healthz_stays_available_when_auth_is_enabled(test_env, monkeypatch):
+    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+
+    response = test_env["client"].get("/healthz")
+
+    assert response.status_code == 200
+    assert response.data == b"ok\n"
+
+
 def test_save_with_invalid_data_does_not_write_csv(test_env):
     draft_dir = test_env["uploads_dir"] / "draft123"
     draft_dir.mkdir(parents=True, exist_ok=True)

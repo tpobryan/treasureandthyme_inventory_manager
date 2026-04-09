@@ -1,0 +1,18 @@
+[Unit]
+Description=AuctionNinja Local App
+After=network.target
+
+[Service]
+Type=simple
+User=auctionninja
+Group=auctionninja
+WorkingDirectory=/opt/auctionninja_local_app
+Environment=PATH=/opt/auctionninja_local_app/.venv/bin
+EnvironmentFile=/opt/auctionninja_local_app/.env
+ExecStart=/opt/auctionninja_local_app/.venv/bin/waitress-serve --host 127.0.0.1 --port 5000 app:app
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
