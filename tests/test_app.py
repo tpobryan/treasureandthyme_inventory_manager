@@ -354,10 +354,15 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
         row = connection.execute(
             "SELECT status, last_export_batch, published_at FROM auction_items WHERE lot_number = 2005"
         ).fetchone()
+        batch = connection.execute(
+            "SELECT export_type, lot_count, lot_numbers FROM export_batches WHERE filename = ?",
+            (row[1],),
+        ).fetchone()
 
     assert row[0] == "published"
     assert row[1].startswith("auction_items_export_")
     assert row[2] is not None
+    assert batch == ("full", 1, "2005")
 
 
 def test_manage_items_requires_database(test_env):
@@ -756,14 +761,37 @@ def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_pa
 def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-
     archived = test_env["exports_dir"] / "auction_items_batch_2000-2001_20260408.csv"
     archived.write_text("Lot Number,Lead\n2000,Lamp\n", encoding="utf-8")
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS export_batches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL UNIQUE,
+                export_type TEXT NOT NULL,
+                lot_numbers TEXT NOT NULL,
+                lot_count INTEGER NOT NULL,
+                archive_path TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO export_batches (filename, export_type, lot_numbers, lot_count, archive_path)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("auction_items_batch_2000-2001_20260408.csv", "selected", "2000,2001", 2, "auction_items_batch_2000-2001_20260408.csv"),
+        )
+        connection.commit()
 
     history_response = test_env["client"].get("/exports")
     assert history_response.status_code == 200
     assert b"Export History" in history_response.data
     assert b"auction_items_batch_2000-2001_20260408.csv" in history_response.data
+    assert b"selected" in history_response.data
+    assert b"2000,2001" in history_response.data
 
     download_response = test_env["client"].get("/exports/auction_items_batch_2000-2001_20260408.csv")
     assert download_response.status_code == 200

@@ -288,6 +288,8 @@
               <thead>
                 <tr>
                   <th>Filename</th>
+                  <th>Type</th>
+                  <th>Lots</th>
                   <th>Saved</th>
                 </tr>
               </thead>
@@ -295,6 +297,8 @@
                 {% for export in recent_exports %}
                   <tr>
                     <td><a href="{{ url_for('download_export_archive', filename=export['filename']) }}">{{ export['filename'] }}</a></td>
+                    <td>{{ export['export_type'] }}</td>
+                    <td>{{ export['lot_count'] }}</td>
                     <td>{{ export['modified_at'] }}</td>
                   </tr>
                 {% endfor %}

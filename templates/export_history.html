@@ -138,6 +138,8 @@
           <thead>
             <tr>
               <th>Filename</th>
+              <th>Type</th>
+              <th>Lots</th>
               <th>Saved</th>
               <th>Size</th>
               <th>Action</th>
@@ -147,6 +149,8 @@
             {% for archive in archives %}
               <tr>
                 <td>{{ archive['filename'] }}</td>
+                <td>{{ archive['export_type'] }}</td>
+                <td>{{ archive['lot_count'] }}{% if archive['lot_numbers'] %}<br><span style="color:#6b7280; font-size:0.9rem;">{{ archive['lot_numbers'] }}</span>{% endif %}</td>
                 <td>{{ archive['modified_at'] }}</td>
                 <td>{{ archive['size_bytes'] }} bytes</td>
                 <td><a class="button-link secondary" href="{{ url_for('download_export_archive', filename=archive['filename']) }}">Download</a></td>

@@ -411,6 +411,19 @@ def ensure_item_store_ready() -> None:
             )
             _ensure_sqlite_column(cursor, "auction_items", "last_export_batch", "TEXT")
             _ensure_sqlite_column(cursor, "auction_items", "published_at", "TEXT")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS export_batches (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL UNIQUE,
+                    export_type TEXT NOT NULL,
+                    lot_numbers TEXT NOT NULL,
+                    lot_count INTEGER NOT NULL,
+                    archive_path TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
         else:
             cursor.execute(
                 """
@@ -442,6 +455,19 @@ def ensure_item_store_ready() -> None:
             )
             _ensure_mysql_column(cursor, "auction_items", "last_export_batch", "VARCHAR(255) NULL")
             _ensure_mysql_column(cursor, "auction_items", "published_at", "TIMESTAMP NULL DEFAULT NULL")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS export_batches (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    filename VARCHAR(255) NOT NULL UNIQUE,
+                    export_type VARCHAR(64) NOT NULL,
+                    lot_numbers TEXT NOT NULL,
+                    lot_count INT NOT NULL,
+                    archive_path VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
         connection.commit()
     finally:
         connection.close()
@@ -1723,14 +1749,122 @@ def archive_export_csv(filename: str, csv_text: str) -> Path:
     return archive_path
 
 
+def record_export_batch(
+    filename: str,
+    export_type: str,
+    lot_numbers: list[int],
+    archive_path: Path,
+) -> None:
+    if not database_enabled():
+        return
+
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    serialized_lots = ",".join(str(lot_number) for lot_number in lot_numbers)
+
+    try:
+        cursor = connection.cursor()
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO export_batches (
+                    filename,
+                    export_type,
+                    lot_numbers,
+                    lot_count,
+                    archive_path
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    filename,
+                    export_type,
+                    serialized_lots,
+                    len(lot_numbers),
+                    archive_path.name,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO export_batches (
+                    filename,
+                    export_type,
+                    lot_numbers,
+                    lot_count,
+                    archive_path
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    export_type = VALUES(export_type),
+                    lot_numbers = VALUES(lot_numbers),
+                    lot_count = VALUES(lot_count),
+                    archive_path = VALUES(archive_path)
+                """,
+                (
+                    filename,
+                    export_type,
+                    serialized_lots,
+                    len(lot_numbers),
+                    archive_path.name,
+                ),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def list_export_archives() -> list[dict[str, str]]:
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, _dialect = connect_item_store()
+        assert connection is not None
+
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                SELECT filename, export_type, lot_numbers, lot_count, archive_path, created_at
+                FROM export_batches
+                ORDER BY created_at DESC, id DESC
+                """
+            )
+            records = cursor.fetchall()
+        finally:
+            connection.close()
+
+        archives: list[dict[str, str]] = []
+        for record in records:
+            if isinstance(record, sqlite3.Row):
+                row = {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+            elif isinstance(record, dict):
+                row = {key: "" if value is None else str(value) for key, value in record.items()}
+            else:
+                continue
+            archive_file = EXPORTS_DIR / row["archive_path"]
+            size_bytes = archive_file.stat().st_size if archive_file.exists() else 0
+            archives.append(
+                {
+                    "filename": row["filename"],
+                    "export_type": row["export_type"],
+                    "lot_numbers": row["lot_numbers"],
+                    "lot_count": row["lot_count"],
+                    "modified_at": row["created_at"],
+                    "size_bytes": str(size_bytes),
+                }
+            )
+        return archives
+
     archives: list[dict[str, str]] = []
     for path in sorted(EXPORTS_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
         stat = path.stat()
         archives.append(
             {
                 "filename": path.name,
+                "export_type": "archived",
+                "lot_numbers": "",
+                "lot_count": "0",
                 "size_bytes": str(stat.st_size),
                 "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
             }
@@ -1778,9 +1912,16 @@ def export_csv():
 
     filename = f"auction_items_export_{time.strftime('%Y%m%d')}.csv"
     csv_text = build_csv_text(rows)
-    archive_export_csv(filename, csv_text)
+    lot_numbers = lot_numbers_from_rows(rows)
+    archive_path = archive_export_csv(filename, csv_text)
+    record_export_batch(
+        filename=filename,
+        export_type="full",
+        lot_numbers=lot_numbers,
+        archive_path=archive_path,
+    )
     mark_lots_as_published(
-        lot_numbers=lot_numbers_from_rows(rows),
+        lot_numbers=lot_numbers,
         export_batch_name=filename,
     )
     return Response(
@@ -2012,7 +2153,13 @@ def export_selected_csv():
         export_batch_name=filename,
     )
     csv_text = build_csv_text(rows)
-    archive_export_csv(filename, csv_text)
+    archive_path = archive_export_csv(filename, csv_text)
+    record_export_batch(
+        filename=filename,
+        export_type="selected",
+        lot_numbers=selected_lots,
+        archive_path=archive_path,
+    )
 
     return Response(
         csv_text,
