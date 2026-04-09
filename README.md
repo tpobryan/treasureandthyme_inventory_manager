@@ -32,7 +32,7 @@ Install packages:
 pip install -r requirements.txt
 ```
 
-The requirements include `Pillow` and `pillow-heif` so the app can open and optimize iPhone/iPad HEIC photos before sending them to OpenAI or saving JPGs locally.
+The requirements include `Pillow` and `pi-heif` so the app can open and optimize iPhone/iPad HEIC photos before sending them to OpenAI or saving JPGs locally. On Raspberry Pi, `pi-heif` is preferred because it ships lighter binary wheels from the same codebase as `pillow-heif`.
 
 Copy the environment file and add your API key:
 

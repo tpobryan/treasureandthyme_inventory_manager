@@ -29,10 +29,23 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageOps
-from pillow_heif import register_heif_opener
-register_heif_opener()
 from ftplib import FTP, FTP_TLS, error_perm
 from auctionninja_generator import AuctionNinjaGenerator
+
+try:
+    from pi_heif import register_heif_opener
+    HEIF_BACKEND = "pi-heif"
+except ImportError:
+    try:
+        from pillow_heif import register_heif_opener
+        HEIF_BACKEND = "pillow-heif"
+    except ImportError:
+        register_heif_opener = None
+        HEIF_BACKEND = ""
+
+HEIF_SUPPORT_ENABLED = register_heif_opener is not None
+if HEIF_SUPPORT_ENABLED:
+    register_heif_opener()
 
 load_dotenv()
 
@@ -62,7 +75,9 @@ app.logger.setLevel(logging.INFO)
 
 generator = AuctionNinjaGenerator()
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+if HEIF_SUPPORT_ENABLED:
+    ALLOWED_EXTENSIONS.update({".heic", ".heif"})
 
 CSV_HEADER = [
     "Lot Number",
@@ -2172,6 +2187,11 @@ def save_uploaded_files_to_dir(uploaded_files, temp_dir: Path) -> list[Path]:
 
         suffix = Path(original_name).suffix.lower()
         if suffix not in ALLOWED_EXTENSIONS:
+            if suffix in {".heic", ".heif"} and not HEIF_SUPPORT_ENABLED:
+                flash(
+                    "HEIC/HEIF upload is not available on this server yet. "
+                    "Install pi-heif (preferred on Raspberry Pi) or convert the photo to JPG first."
+                )
             app.logger.warning("Unsupported extension skipped: %s", suffix)
             continue
 
