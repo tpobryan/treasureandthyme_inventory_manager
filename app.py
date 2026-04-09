@@ -424,6 +424,18 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ftp_uploads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lot_number INTEGER NOT NULL UNIQUE,
+                    auction_number TEXT NOT NULL,
+                    auction_photo_index INTEGER NOT NULL,
+                    remote_names TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
         else:
             cursor.execute(
                 """
@@ -464,6 +476,18 @@ def ensure_item_store_ready() -> None:
                     lot_numbers TEXT NOT NULL,
                     lot_count INT NOT NULL,
                     archive_path VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ftp_uploads (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    lot_number INT NOT NULL UNIQUE,
+                    auction_number VARCHAR(255) NOT NULL,
+                    auction_photo_index INT NOT NULL,
+                    remote_names TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -1471,6 +1495,49 @@ def ensure_ftp_upload_state() -> None:
 
 
 def get_ftp_upload_record(lot_number: int | str) -> dict[str, object] | None:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        try:
+            cursor = connection.cursor()
+            placeholder = "?" if dialect == "sqlite" else "%s"
+            cursor.execute(
+                f"""
+                SELECT lot_number, auction_number, auction_photo_index, remote_names
+                FROM ftp_uploads
+                WHERE lot_number = {placeholder}
+                """,
+                (int(lot_number),),
+            )
+            record = cursor.fetchone()
+        finally:
+            connection.close()
+
+        if not record:
+            return None
+
+        if isinstance(record, sqlite3.Row):
+            row = {key: record[key] for key in record.keys()}
+        elif isinstance(record, dict):
+            row = dict(record)
+        else:
+            return None
+
+        remote_names = row.get("remote_names", "")
+        if isinstance(remote_names, str):
+            remote_names_list = [name for name in remote_names.split(",") if name]
+        else:
+            remote_names_list = list(remote_names)
+
+        return {
+            "lot_number": int(row.get("lot_number", lot_number)),
+            "auction_number": str(row.get("auction_number", "")),
+            "auction_photo_index": int(row.get("auction_photo_index", 0)),
+            "remote_names": remote_names_list,
+        }
+
     ensure_ftp_upload_state()
     data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
     record = data.get(str(lot_number))
@@ -1483,6 +1550,58 @@ def record_ftp_upload(
     auction_photo_index: int,
     remote_names: list[str],
 ) -> None:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        serialized_remote_names = ",".join(remote_names)
+
+        try:
+            cursor = connection.cursor()
+            if dialect == "sqlite":
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO ftp_uploads (
+                        lot_number,
+                        auction_number,
+                        auction_photo_index,
+                        remote_names
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        lot_number,
+                        str(auction_number),
+                        int(auction_photo_index),
+                        serialized_remote_names,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO ftp_uploads (
+                        lot_number,
+                        auction_number,
+                        auction_photo_index,
+                        remote_names
+                    ) VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        auction_number = VALUES(auction_number),
+                        auction_photo_index = VALUES(auction_photo_index),
+                        remote_names = VALUES(remote_names)
+                    """,
+                    (
+                        lot_number,
+                        str(auction_number),
+                        int(auction_photo_index),
+                        serialized_remote_names,
+                    ),
+                )
+            connection.commit()
+        finally:
+            connection.close()
+        return
+
     with state_lock(FTP_UPLOAD_STATE_LOCK_PATH):
         ensure_ftp_upload_state()
         data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
@@ -1495,6 +1614,23 @@ def record_ftp_upload(
 
 
 def delete_ftp_upload_record(lot_number: int | str) -> None:
+    if database_enabled():
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+
+        try:
+            cursor = connection.cursor()
+            placeholder = "?" if dialect == "sqlite" else "%s"
+            cursor.execute(
+                f"DELETE FROM ftp_uploads WHERE lot_number = {placeholder}",
+                (int(lot_number),),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        return
+
     with state_lock(FTP_UPLOAD_STATE_LOCK_PATH):
         ensure_ftp_upload_state()
         data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))

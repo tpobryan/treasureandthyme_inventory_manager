@@ -182,6 +182,36 @@ def test_record_and_delete_ftp_upload_record(test_env):
     assert app_module.get_ftp_upload_record(2056) is None
 
 
+def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    app_module.record_ftp_upload(
+        lot_number=3056,
+        auction_number="9",
+        auction_photo_index=8,
+        remote_names=["8_1.jpg", "8_2.jpg"],
+    )
+
+    record = app_module.get_ftp_upload_record(3056)
+
+    assert record is not None
+    assert record["auction_number"] == "9"
+    assert record["auction_photo_index"] == 8
+    assert record["remote_names"] == ["8_1.jpg", "8_2.jpg"]
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT auction_number, auction_photo_index, remote_names FROM ftp_uploads WHERE lot_number = 3056"
+        ).fetchone()
+
+    assert row == ("9", 8, "8_1.jpg,8_2.jpg")
+
+    app_module.delete_ftp_upload_record(3056)
+
+    assert app_module.get_ftp_upload_record(3056) is None
+
+
 def test_delete_remote_upload_without_record_flashes_message(test_env):
     response = test_env["client"].post(
         "/delete_remote_upload",
