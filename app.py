@@ -2534,12 +2534,12 @@ def ensure_remote_dir(ftp, remote_dir: str) -> None:
 def upload_lot_photos_to_auctionninja(
     local_files: list[Path],
     auction_number: str,
-    auction_photo_index: int,
+    lot_number: int,
 ) -> list[str]:
     """
     Upload files to AuctionNinja naming format:
     folder: auction_number
-    files: {auction_photo_index}_1.jpg, {auction_photo_index}_2.jpg, ...
+    files: {lot_number}_1.jpg, {lot_number}_2.jpg, ...
     """
     if not local_files:
         return []
@@ -2551,7 +2551,7 @@ def upload_lot_photos_to_auctionninja(
         ensure_remote_dir(ftp, str(auction_number))
 
         for i, local_file in enumerate(sorted(local_files), start=1):
-            remote_name = f"{auction_photo_index}_{i}.jpg"
+            remote_name = f"{lot_number}_{i}.jpg"
             with local_file.open("rb") as f:
                 ftp.storbinary(f"STOR {remote_name}", f)
             uploaded_names.append(remote_name)
@@ -3694,7 +3694,7 @@ def save():
             uploaded_names = upload_lot_photos_to_auctionninja(
                 local_files=local_jpgs,
                 auction_number=auction_number,
-                auction_photo_index=auction_photo_index,
+                    lot_number=csv_lot_number,
             )
         except Exception as exc:
             app.logger.exception("FTP upload failed")

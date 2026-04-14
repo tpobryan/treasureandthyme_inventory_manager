@@ -78,7 +78,154 @@ Field rules:
 - mark_notes: short note about visible marks, signatures, tags, or lack of marks
 - title: concise, searchable, AuctionNinja-appropriate
 - description: 1-2 short factual sentences
-- category: one broad resale category
+- category: choose most appropriate category from this list: 
+Jewelry & Watches
+Clothing & Fashion Accessories
+Silver & Silver Plate
+Coins & Stamps
+Furniture
+Fine Art
+Home Decor
+Lighting
+Housewares
+Lawn & Garden
+Motor Vehicles
+Sports Memorabilia, Trading Cards & Ephemera
+Exercise & Sporting Equipment
+Toys & Video Gaming
+Garage & Tools
+Commercial & Industrial Equipment
+Watch / Timepiece
+Necklaces
+Engagement Rings
+Ring
+Earrings
+Bracelets
+Hairpin/Comb
+Pins/Brooches
+Jewelry Suite / Set
+Other Jewelry
+Clothing - Womens
+Clothing - Mens
+Clothing - Children
+Shoes - Womens
+Shoes - Mens
+Shoes - Children
+Men's Accessories (Ties, etc.)
+Purses/Handbags
+Scarves
+Hats
+Silverware
+Tea Sets
+Bowls, Vessels, Vases, Platters & Trays
+Vanity Sets
+Coins
+Stamps
+Dining Room
+Sofa/Settees
+Other Seating
+Desks
+Tables
+Beds
+Chairs
+Storage
+Paintings
+Sculpture
+Works on Paper
+Photography
+Rugs & Carpets
+Porcelains / Fine China
+Fine Crystal & Art Glass
+Decor
+Throw Pillows
+Barware
+Baskets
+Books & Bookends
+Clocks
+Decorative Bowls, Vessels & Vases
+Desktop Sets
+Fireplace Tools & Accessories
+Mirrors
+Window Treatments
+Wall Accents / Art
+Chandelier
+Ceiling Mount
+Table Lamp
+Wall Sconce
+Floor Lamp
+Cookware
+Tableware
+Everyday Glassware
+Cutlery & Knives
+Bedding / Linens
+Patio Furniture
+Lawn Decor
+Garden Tools
+Lawn Mower / Tractor
+Cars & Trucks
+Boats
+Motorcycles/Scooters
+Wave Runners
+Trailers
+Sports Cards
+Autographs
+Product Labels
+Trading Cards
+Placemat & Napkin Ephemera
+Envelopes & Letters
+Sports Gear
+Fitness / Gym Equipment
+Toys
+Dolls
+Video Games
+Powertools
+Handtools
+Electronics & Computers
+Cameras & Photography Equipment
+Computers
+Scanners and Printers
+Stereo and Audio Equipment
+Telephones and Accessories
+TVs and Video
+Music & Musical Instruments
+Militaria
+Architectural Salvage
+Holiday / Seasonal
+Loose Gems, Minerals & Geodes
+Postcards
+Household Appliances
+Silver Plate
+Bikes
+Tool Storage
+Camper
+Automotive Parts & Accessories
+Board Games
+Restaurant & Food Services
+Office
+Retail & Warehouse
+Industrial Machinery
+Vinyl Records
+CDs
+Pianos
+Strings
+Woodwind
+Brass
+Percussion
+Helmets & Uniforms
+Medals, Buttons, & Epaulettes
+Swords, Blades & Antique Firearms
+War Memorabilia
+Military Documents & Ephemera
+Other Military Collectibles
+Cabinetry & Built-Ins
+Doors & Windows
+Fixtures & Hardware
+Moulding, Trim & Architectural Elements
+Flooring
+Masonry (Bricks, Stone, etc.)
+Softscaping (Trees, Plants, & Shrubs)
+Comic Books
+Pet Supplies & Accessories
 - condition_summary: short neutral condition note based on visible evidence and seller notes
 - keywords: 10-15 comma-separated search phrases
 
