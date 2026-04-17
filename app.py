@@ -1259,6 +1259,14 @@ def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
 
 
 def fetch_last_lot_from_store() -> int:
+    ensure_lot_state()
+    try:
+        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
+        if "override_last_lot" in data:
+            return int(data["override_last_lot"])
+    except Exception:
+        pass
+
     if not database_enabled():
         ensure_lot_state()
         data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
@@ -2091,13 +2099,30 @@ def get_last_lot() -> int:
 
 
 def get_next_lot_preview() -> int:
-    return get_last_lot() + 1
+    candidate = get_last_lot() + 1
+    if database_enabled():
+        while fetch_saved_item(candidate) is not None:
+            candidate += 1
+    return candidate
 
 
 def reserve_next_lot() -> int:
     with state_lock(LOT_LOCK_PATH):
         if database_enabled():
-            return fetch_last_lot_from_store() + 1
+            candidate = fetch_last_lot_from_store() + 1
+            
+            # Auto-skip occupied lot numbers
+            while fetch_saved_item(candidate) is not None:
+                candidate += 1
+
+            try:
+                ensure_lot_state()
+                data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
+                data["override_last_lot"] = candidate
+                LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+            return candidate
 
         ensure_lot_state()
         data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
@@ -3727,6 +3752,31 @@ def save():
 @app.route("/uploads/<temp_id>/<filename>")
 def uploaded_file(temp_id: str, filename: str):
     return send_from_directory(UPLOADS_DIR / temp_id, filename)
+
+
+@app.route("/set_next_lot", methods=["POST"])
+def set_next_lot():
+    next_lot_str = request.form.get("next_lot", "").strip()
+    if not next_lot_str.isdigit():
+        flash("Next lot must be a valid number.")
+        return redirect(request.referrer or url_for("index"))
+
+    next_lot = int(next_lot_str)
+    last_lot = next_lot - 1
+
+    ensure_lot_state()
+    try:
+        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+
+    data["last_lot"] = last_lot
+    if database_enabled():
+        data["override_last_lot"] = last_lot
+
+    LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    flash(f"Next lot number successfully set to {next_lot}.")
+    return redirect(request.referrer or url_for("index"))
 
 
 @app.route("/reset", methods=["POST"])
