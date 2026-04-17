@@ -525,7 +525,13 @@
         </div>
       {% endif %}
 
-      <div class="lot-preview">Next lot number: {{ next_lot }}</div>
+      <div style="margin-bottom: 16px;">
+        <div class="lot-preview" style="margin-bottom: 0;">Next lot number: {{ next_lot }}</div>
+        <form action="{{ url_for('set_next_lot') }}" method="post" style="display: inline-flex; gap: 8px; align-items: center; margin-left: 12px; vertical-align: top;">
+          <input type="number" name="next_lot" placeholder="Override lot..." required style="width: 150px; padding: 8px 12px; margin: 0;">
+          <button type="submit" class="secondary" style="padding: 8px 14px;">Update</button>
+        </form>
+      </div>
 
       <form id="analyzeForm" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
         <div class="field">
