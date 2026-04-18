@@ -624,9 +624,9 @@
           <p class="danger-copy" style="color: #065f46;">
             Scans your local uploads folder and sends any photos that haven't been uploaded to the FTP server yet.
           </p>
-          <form action="{{ url_for('upload_all_ftp') }}" method="post">
-            <button type="submit" class="secondary" style="background: #059669; color: white; width: 100%;" onclick="return confirm('Scan and upload all missing lot photos to the FTP server now?');">
-              Upload All Missing Lots
+          <form action="{{ url_for('ftp_preview') }}" method="get">
+            <button type="submit" class="secondary" style="background: #059669; color: white; width: 100%;">
+              Preview Missing Lots
             </button>
           </form>
         </div>

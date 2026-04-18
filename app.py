@@ -2576,7 +2576,7 @@ def ensure_remote_dir(ftp, remote_dir: str) -> None:
 
 
 def upload_lot_photos_to_auctionninja(
-    local_files: list[Path],
+    local_files: list[Any],
     auction_number: str,
     lot_number: int,
 ) -> list[str]:
@@ -2584,6 +2584,7 @@ def upload_lot_photos_to_auctionninja(
     Upload files to AuctionNinja naming format:
     folder: auction_number
     files: {lot_number}_1.jpg, {lot_number}_2.jpg, ...
+    or custom names if a list of tuples is provided.
     """
     if not local_files:
         return []
@@ -2594,8 +2595,12 @@ def upload_lot_photos_to_auctionninja(
     try:
         ensure_remote_dir(ftp, str(auction_number))
 
-        for i, local_file in enumerate(sorted(local_files), start=1):
-            remote_name = f"{lot_number}_{i}.jpg"
+        if isinstance(local_files[0], tuple):
+            files_to_upload = local_files
+        else:
+            files_to_upload = [(f, f"{lot_number}_{i}.jpg") for i, f in enumerate(sorted(local_files), start=1)]
+
+        for local_file, remote_name in files_to_upload:
             with local_file.open("rb") as f:
                 ftp.storbinary(f"STOR {remote_name}", f)
             uploaded_names.append(remote_name)
@@ -3989,18 +3994,17 @@ def upload_remote_ftp():
     return redirect(url_for("index"))
 
 
-@app.route("/upload_all_ftp", methods=["POST"])
-def upload_all_ftp():
+@app.route("/ftp_preview", methods=["GET"])
+def ftp_preview():
     auction_number = current_auction_number_for_upload()
     if not auction_number:
-        flash("You must set an active AUCTION_NUMBER to upload photos.")
+        flash("You must set an active AUCTION_NUMBER to preview photos.")
         return redirect(url_for("index"))
 
-    uploaded_count = 0
-    skipped_count = 0
+    missing_lots = []
 
     if UPLOADS_DIR.exists():
-        for final_dir in UPLOADS_DIR.iterdir():
+        for final_dir in sorted(UPLOADS_DIR.iterdir(), key=lambda d: d.name):
             if not final_dir.is_dir():
                 continue
 
@@ -4010,7 +4014,6 @@ def upload_all_ftp():
 
             lot_number = int(parts[0])
             if get_ftp_upload_record(lot_number):
-                skipped_count += 1
                 continue
 
             local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
@@ -4018,25 +4021,97 @@ def upload_all_ftp():
                 continue
             
             current_lot_auction = auction_number
+            item_title = ""
+            item_description = ""
             if database_enabled():
                 item = fetch_saved_item(lot_number)
-                if item and item.get("auction_id"):
-                    current_lot_auction = str(item["auction_id"])
+                if item:
+                    if item.get("auction_id"):
+                        current_lot_auction = str(item["auction_id"])
+                    item_title = item.get("title", "")
+                    item_description = item.get("description", "")
 
-            try:
-                auction_photo_index = reserve_next_auction_photo_index(current_lot_auction)
-                uploaded_names = upload_lot_photos_to_auctionninja(local_jpgs, current_lot_auction, lot_number)
-                if uploaded_names:
-                    record_ftp_upload(lot_number, current_lot_auction, auction_photo_index, uploaded_names)
-                    uploaded_count += 1
-            except Exception as exc:
-                app.logger.exception("FTP upload failed for lot %s", lot_number)
-                flash(f"FTP upload failed for lot {lot_number}: {exc}")
+            files_info = []
+            for i, p in enumerate(local_jpgs, start=1):
+                files_info.append({
+                    "original_name": p.name,
+                    "remote_name": f"{lot_number}_{i}.jpg"
+                })
+
+            missing_lots.append({
+                "lot_number": lot_number,
+                "auction_number": current_lot_auction,
+                "title": item_title,
+                "description": item_description,
+                "folder": final_dir.name,
+                "files": files_info
+            })
+
+    return render_template("ftp_preview.html", missing_lots=missing_lots)
+
+
+@app.route("/upload_selected_ftp", methods=["POST"])
+def upload_selected_ftp():
+    auction_number = current_auction_number_for_upload()
+    if not auction_number:
+        flash("You must set an active AUCTION_NUMBER to upload photos.")
+        return redirect(url_for("index"))
+
+    lots_to_upload = {}
+    for key, value in request.form.items():
+        if key.startswith("lot_") and "_file_" in key:
+            parts = key.split("_", 3)
+            lot_number = int(parts[1])
+            original_name = parts[3]
+
+            if lot_number not in lots_to_upload:
+                lots_to_upload[lot_number] = {
+                    "auction_number": request.form.get(f"lot_{lot_number}_auction"),
+                    "folder": request.form.get(f"lot_{lot_number}_folder"),
+                    "files": []
+                }
+            
+            remote_name = request.form.get(f"lot_{lot_number}_name_{original_name}", original_name).strip()
+            if not remote_name:
+                remote_name = original_name
+
+            lots_to_upload[lot_number]["files"].append((original_name, remote_name))
+
+    uploaded_count = 0
+    
+    for lot_number, data in lots_to_upload.items():
+        folder = data["folder"]
+        current_lot_auction = data["auction_number"]
+        if not folder or not current_lot_auction:
+            continue
+            
+        final_dir = UPLOADS_DIR / folder
+        if not final_dir.exists():
+            continue
+
+        files_to_upload = []
+        for orig_name, remote_name in data["files"]:
+            local_path = final_dir / orig_name
+            if local_path.exists():
+                files_to_upload.append((local_path, remote_name))
+
+        if not files_to_upload:
+            continue
+
+        try:
+            auction_photo_index = reserve_next_auction_photo_index(current_lot_auction)
+            uploaded_names = upload_lot_photos_to_auctionninja(files_to_upload, current_lot_auction, lot_number)
+            if uploaded_names:
+                record_ftp_upload(lot_number, current_lot_auction, auction_photo_index, uploaded_names)
+                uploaded_count += 1
+        except Exception as exc:
+            app.logger.exception("FTP upload failed for lot %s", lot_number)
+            flash(f"FTP upload failed for lot {lot_number}: {exc}")
 
     if uploaded_count > 0:
-        flash(f"Successfully uploaded photos to FTP for {uploaded_count} lot(s). Skipped {skipped_count} already-uploaded lot(s).")
+        flash(f"Successfully uploaded photos to FTP for {uploaded_count} lot(s).")
     else:
-        flash(f"No new lot photos were found to upload. Skipped {skipped_count} already-uploaded lot(s).")
+        flash("No new lot photos were uploaded.")
 
     return redirect(url_for("index"))
 

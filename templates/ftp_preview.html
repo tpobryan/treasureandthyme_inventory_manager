@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview Missing FTP Photos</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --border: #d9deea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.7rem;
+      line-height: 1.2;
+    }
+
+    .sub {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    .lot-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      background: #fcfcff;
+    }
+
+    .lot-header {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .lot-details {
+      margin-bottom: 14px;
+      font-size: 0.95rem;
+      color: #374151;
+      line-height: 1.4;
+    }
+
+    .lot-details-title {
+      font-weight: 600;
+    }
+
+    .lot-details-desc {
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .file-row img {
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .file-input {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .file-input input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .checkbox-col {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    button,
+    .button-link {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    button:hover,
+    .button-link:hover {
+      background: var(--accent-hover);
+    }
+
+    button.secondary,
+    .button-link.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    button.secondary:hover,
+    .button-link.secondary:hover {
+      background: #d1d5db;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Preview Missing FTP Photos</h1>
+      <p class="sub">Select the photos to upload and adjust their remote filenames if needed.</p>
+
+      {% if missing_lots %}
+      <form action="{{ url_for('upload_selected_ftp') }}" method="post">
+        {% for lot in missing_lots %}
+          <div class="lot-card">
+            <div class="lot-header">
+              <span>Lot {{ lot.lot_number }} (Auction {{ lot.auction_number }})</span>
+              <label style="font-size: 0.9rem; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" class="lot-select-all" data-lot="{{ lot.lot_number }}" checked>
+                Select All
+              </label>
+            </div>
+            
+            {% if lot.title or lot.description %}
+            <div class="lot-details">
+              {% if lot.title %}<div class="lot-details-title">{{ lot.title }}</div>{% endif %}
+              {% if lot.description %}<div class="lot-details-desc">{{ lot.description }}</div>{% endif %}
+            </div>
+            {% endif %}
+
+            <input type="hidden" name="lot_{{ lot.lot_number }}_auction" value="{{ lot.auction_number }}">
+            <input type="hidden" name="lot_{{ lot.lot_number }}_folder" value="{{ lot.folder }}">
+            
+            {% for file in lot.files %}
+              <div class="file-row">
+                <div class="checkbox-col">
+                  <input type="checkbox" class="file-checkbox lot-{{ lot.lot_number }}-checkbox" data-lot="{{ lot.lot_number }}" id="lot_{{ lot.lot_number }}_file_{{ file.original_name }}" name="lot_{{ lot.lot_number }}_file_{{ file.original_name }}" checked>
+                </div>
+                <img src="{{ url_for('uploaded_file', temp_id=lot.folder, filename=file.original_name) }}" alt="Thumbnail">
+                <div class="file-input">
+                  <label for="lot_{{ lot.lot_number }}_name_{{ file.original_name }}" style="font-size: 0.8rem; margin-bottom: 2px; color: #6b7280; display: block;">Remote Filename (Original: {{ file.original_name }})</label>
+                  <input type="text" id="lot_{{ lot.lot_number }}_name_{{ file.original_name }}" name="lot_{{ lot.lot_number }}_name_{{ file.original_name }}" value="{{ file.remote_name }}">
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+
+        <div class="button-row">
+          <button type="submit">Upload Selected Photos</button>
+          <a class="button-link secondary" href="{{ url_for('index') }}">Cancel</a>
+        </div>
+      </form>
+      {% else %}
+        <p>No missing lots found to upload.</p>
+        <div class="button-row">
+          <a class="button-link secondary" href="{{ url_for('index') }}">Back to Dashboard</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // Handle "Select All" toggles
+      const selectAllCheckboxes = document.querySelectorAll(".lot-select-all");
+      selectAllCheckboxes.forEach(selectAllBtn => {
+        selectAllBtn.addEventListener("change", (e) => {
+          const lotNumber = e.target.dataset.lot;
+          const isChecked = e.target.checked;
+          const fileCheckboxes = document.querySelectorAll(`.lot-${lotNumber}-checkbox`);
+          fileCheckboxes.forEach(cb => {
+            cb.checked = isChecked;
+          });
+        });
+      });
+
+      // Handle individual file toggles to update the "Select All" state
+      const fileCheckboxes = document.querySelectorAll(".file-checkbox");
+      fileCheckboxes.forEach(cb => {
+        cb.addEventListener("change", (e) => {
+          const lotNumber = e.target.dataset.lot;
+          const allForLot = document.querySelectorAll(`.lot-${lotNumber}-checkbox`);
+          const selectAllBtn = document.querySelector(`.lot-select-all[data-lot="${lotNumber}"]`);
+          if (selectAllBtn) {
+            const allChecked = Array.from(allForLot).every(c => c.checked);
+            const someChecked = Array.from(allForLot).some(c => c.checked);
+            selectAllBtn.checked = allChecked;
+            selectAllBtn.indeterminate = someChecked && !allChecked;
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
