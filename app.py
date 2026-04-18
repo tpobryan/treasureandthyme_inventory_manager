@@ -98,7 +98,7 @@ CSV_HEADER = [
     "Shipping Available",
     "Category",
 ]
-DEFAULT_STARTING_LOT = 1999
+DEFAULT_STARTING_LOT = 0
 DEFAULT_AUCTION_ID = 4
 ITEM_STATUS_READY = "ready"
 ITEM_STATUS_PUBLISHED = "published"
@@ -617,7 +617,7 @@ def ensure_item_store_ready() -> None:
                 CREATE TABLE IF NOT EXISTS auction_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     auction_id INTEGER,
-                    lot_number INTEGER NOT NULL UNIQUE,
+                    lot_number INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     description TEXT NOT NULL,
                     condition_notes TEXT NOT NULL,
@@ -637,7 +637,8 @@ def ensure_item_store_ready() -> None:
                     last_export_batch TEXT,
                     published_at TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(auction_id, lot_number)
                 )
                 """
             )
@@ -663,12 +664,13 @@ def ensure_item_store_ready() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS ftp_uploads (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    lot_number INTEGER NOT NULL UNIQUE,
+                    lot_number INTEGER NOT NULL,
                     auction_id INTEGER,
                     auction_number TEXT NOT NULL,
                     auction_photo_index INTEGER NOT NULL,
                     remote_names TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(auction_id, lot_number)
                 )
                 """
             )
@@ -714,7 +716,7 @@ def ensure_item_store_ready() -> None:
                 CREATE TABLE IF NOT EXISTS auction_items (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     auction_id INT NULL,
-                    lot_number INT NOT NULL UNIQUE,
+                    lot_number INT NOT NULL,
                     title TEXT NOT NULL,
                     description LONGTEXT NOT NULL,
                     condition_notes TEXT NOT NULL,
@@ -734,7 +736,8 @@ def ensure_item_store_ready() -> None:
                     last_export_batch VARCHAR(255) NULL,
                     published_at TIMESTAMP NULL DEFAULT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_auction_lot (auction_id, lot_number)
                 )
                 """
             )
@@ -760,12 +763,13 @@ def ensure_item_store_ready() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS ftp_uploads (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    lot_number INT NOT NULL UNIQUE,
+                    lot_number INT NOT NULL,
                     auction_id INT NULL,
                     auction_number VARCHAR(255) NOT NULL,
                     auction_photo_index INT NOT NULL,
                     remote_names TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_auction_ftp_lot (auction_id, lot_number)
                 )
                 """
             )
@@ -1259,18 +1263,21 @@ def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
 
 
 def fetch_last_lot_from_store() -> int:
+    current_auction_id = get_current_auction_id()
+    override_key = f"override_last_lot_{current_auction_id}"
+    
     ensure_lot_state()
     try:
         data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        if "override_last_lot" in data:
-            return int(data["override_last_lot"])
+        if override_key in data:
+            return int(data[override_key])
     except Exception:
         pass
 
     if not database_enabled():
         ensure_lot_state()
         data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        return int(data.get("last_lot", DEFAULT_STARTING_LOT))
+        return int(data.get(f"last_lot_{current_auction_id}", DEFAULT_STARTING_LOT))
 
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
@@ -1278,7 +1285,8 @@ def fetch_last_lot_from_store() -> int:
 
     try:
         cursor = connection.cursor()
-        cursor.execute("SELECT MAX(lot_number) AS max_lot FROM auction_items")
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(f"SELECT MAX(lot_number) AS max_lot FROM auction_items WHERE auction_id = {placeholder}", (current_auction_id,))
         row = cursor.fetchone()
     finally:
         connection.close()
@@ -1662,6 +1670,8 @@ def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str,
 def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
     if not database_enabled():
         return None
+        
+    current_auction_id = get_current_auction_id()
 
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
@@ -1695,9 +1705,10 @@ def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
                 published_at,
                 last_export_batch
             FROM auction_items
-            WHERE lot_number = {placeholder}
+            WHERE lot_number = {placeholder} 
+              AND auction_id = {placeholder}
             """,
-            (lot_number,),
+            (lot_number, current_auction_id),
         )
         record = cursor.fetchone()
     finally:
@@ -1811,7 +1822,7 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     category = ?,
                     status = ?,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE lot_number = ?
+                WHERE lot_number = ? AND auction_id = ?
                 """,
                 (
                     updated_fields["title"],
@@ -1830,6 +1841,7 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     updated_fields["category"],
                     new_status,
                     lot_number,
+                    get_current_auction_id(),
                 ),
             )
         else:
@@ -1852,7 +1864,7 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     shipping_available = %s,
                     category = %s,
                     status = %s
-                WHERE lot_number = %s
+                WHERE lot_number = %s AND auction_id = %s
                 """,
                 (
                     updated_fields["title"],
@@ -1871,6 +1883,7 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     updated_fields["category"],
                     new_status,
                     lot_number,
+                    get_current_auction_id(),
                 ),
             )
         connection.commit()
@@ -1892,6 +1905,7 @@ def mark_item_removed(lot_number: int) -> bool:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
         status_placeholder = "?" if dialect == "sqlite" else "%s"
+        current_auction_id = get_current_auction_id()
         if dialect == "sqlite":
             cursor.execute(
                 f"""
@@ -1899,9 +1913,9 @@ def mark_item_removed(lot_number: int) -> bool:
                 SET
                     status = {status_placeholder},
                     updated_at = CURRENT_TIMESTAMP
-                WHERE lot_number = {placeholder}
+                WHERE lot_number = {placeholder} AND auction_id = {placeholder}
                 """,
-                (ITEM_STATUS_REMOVED, lot_number),
+                (ITEM_STATUS_REMOVED, lot_number, current_auction_id),
             )
         else:
             cursor.execute(
@@ -1909,9 +1923,9 @@ def mark_item_removed(lot_number: int) -> bool:
                 UPDATE auction_items
                 SET
                     status = {status_placeholder}
-                WHERE lot_number = {placeholder}
+                WHERE lot_number = {placeholder} AND auction_id = {placeholder}
                 """,
-                (ITEM_STATUS_REMOVED, lot_number),
+                (ITEM_STATUS_REMOVED, lot_number, current_auction_id),
             )
         connection.commit()
         return cursor.rowcount > 0
@@ -1943,6 +1957,7 @@ def restore_removed_item(lot_number: int) -> str | None:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
         status_placeholder = "?" if dialect == "sqlite" else "%s"
+        current_auction_id = get_current_auction_id()
         if dialect == "sqlite":
             cursor.execute(
                 f"""
@@ -1950,9 +1965,9 @@ def restore_removed_item(lot_number: int) -> str | None:
                 SET
                     status = {status_placeholder},
                     updated_at = CURRENT_TIMESTAMP
-                WHERE lot_number = {placeholder}
+                WHERE lot_number = {placeholder} AND auction_id = {placeholder}
                 """,
-                (restored_status, lot_number),
+                (restored_status, lot_number, current_auction_id),
             )
         else:
             cursor.execute(
@@ -1960,9 +1975,9 @@ def restore_removed_item(lot_number: int) -> str | None:
                 UPDATE auction_items
                 SET
                     status = {status_placeholder}
-                WHERE lot_number = {placeholder}
+                WHERE lot_number = {placeholder} AND auction_id = {placeholder}
                 """,
-                (restored_status, lot_number),
+                (restored_status, lot_number, current_auction_id),
             )
         connection.commit()
     finally:
@@ -1982,6 +1997,7 @@ def set_items_status(lot_numbers: list[int], target_status: str) -> int:
     try:
         cursor = connection.cursor()
         placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
+        current_auction_id = get_current_auction_id()
         if dialect == "sqlite":
             cursor.execute(
                 f"""
@@ -1989,9 +2005,9 @@ def set_items_status(lot_numbers: list[int], target_status: str) -> int:
                 SET
                     status = ?,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE lot_number IN ({placeholders})
+                WHERE lot_number IN ({placeholders}) AND auction_id = ?
                 """,
-                (target_status, *lot_numbers),
+                (target_status, *lot_numbers, current_auction_id),
             )
         else:
             cursor.execute(
@@ -1999,9 +2015,9 @@ def set_items_status(lot_numbers: list[int], target_status: str) -> int:
                 UPDATE auction_items
                 SET
                     status = %s
-                WHERE lot_number IN ({placeholders})
+                WHERE lot_number IN ({placeholders}) AND auction_id = %s
                 """,
-                (target_status, *lot_numbers),
+                (target_status, *lot_numbers, current_auction_id),
             )
         connection.commit()
         return int(cursor.rowcount)
@@ -2107,6 +2123,7 @@ def get_next_lot_preview() -> int:
 
 
 def reserve_next_lot() -> int:
+    current_auction_id = get_current_auction_id()
     with state_lock(LOT_LOCK_PATH):
         if database_enabled():
             candidate = fetch_last_lot_from_store() + 1
@@ -2118,7 +2135,7 @@ def reserve_next_lot() -> int:
             try:
                 ensure_lot_state()
                 data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-                data["override_last_lot"] = candidate
+                data[f"override_last_lot_{current_auction_id}"] = candidate
                 LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
             except Exception:
                 pass
@@ -2126,8 +2143,8 @@ def reserve_next_lot() -> int:
 
         ensure_lot_state()
         data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        next_lot = int(data.get("last_lot", DEFAULT_STARTING_LOT)) + 1
-        data["last_lot"] = next_lot
+        next_lot = int(data.get(f"last_lot_{current_auction_id}", DEFAULT_STARTING_LOT)) + 1
+        data[f"last_lot_{current_auction_id}"] = next_lot
         LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
         return next_lot
 
@@ -2380,13 +2397,14 @@ def get_ftp_upload_record(lot_number: int | str) -> dict[str, object] | None:
         try:
             cursor = connection.cursor()
             placeholder = "?" if dialect == "sqlite" else "%s"
+            current_auction_id = get_current_auction_id()
             cursor.execute(
                 f"""
                 SELECT lot_number, auction_id, auction_number, auction_photo_index, remote_names
                 FROM ftp_uploads
-                WHERE lot_number = {placeholder}
+                WHERE lot_number = {placeholder} AND auction_id = {placeholder}
                 """,
-                (int(lot_number),),
+                (int(lot_number), current_auction_id),
             )
             record = cursor.fetchone()
         finally:
@@ -2506,9 +2524,10 @@ def delete_ftp_upload_record(lot_number: int | str) -> None:
         try:
             cursor = connection.cursor()
             placeholder = "?" if dialect == "sqlite" else "%s"
+            current_auction_id = get_current_auction_id()
             cursor.execute(
-                f"DELETE FROM ftp_uploads WHERE lot_number = {placeholder}",
-                (int(lot_number),),
+                f"DELETE FROM ftp_uploads WHERE lot_number = {placeholder} AND auction_id = {placeholder}",
+                (int(lot_number), current_auction_id),
             )
             connection.commit()
         finally:
@@ -3414,6 +3433,40 @@ def bulk_update_items():
         )
         return redirect(url_for("manage_items", status=current_filter))
 
+    if action == "upload_ftp":
+        uploaded_count = 0
+        for lot_number in selected_lots:
+            item = fetch_saved_item(lot_number)
+            if not item:
+                continue
+            image_folder = item.get("image_folder")
+            if not image_folder:
+                continue
+            final_dir = UPLOADS_DIR / image_folder
+            if not final_dir.exists():
+                continue
+            local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
+            if not local_jpgs:
+                continue
+            auction_number = str(item.get("auction_id", current_auction_number_for_upload()))
+            if not auction_number:
+                continue
+            try:
+                auction_photo_index = reserve_next_auction_photo_index(auction_number)
+                uploaded_names = upload_lot_photos_to_auctionninja(
+                    local_files=local_jpgs,
+                    auction_number=auction_number,
+                    lot_number=lot_number,
+                )
+                if uploaded_names:
+                    record_ftp_upload(lot_number, auction_number, auction_photo_index, uploaded_names)
+                    uploaded_count += 1
+            except Exception as exc:
+                app.logger.exception("Bulk FTP upload failed for lot %s", lot_number)
+                flash(f"FTP upload failed for lot {lot_number}: {exc}")
+        flash(f"Successfully uploaded photos to FTP for {uploaded_count} selected lot(s).")
+        return redirect(url_for("manage_items", status=current_filter))
+
     flash("Choose a valid bulk action.")
     return redirect(url_for("manage_items", status=current_filter))
 
@@ -3690,6 +3743,9 @@ def save():
 
     csv_lot_number = reserve_next_lot()
 
+    if csv_lot_number > 500:
+        flash(f"Warning: AuctionNinja limits auctions to a maximum of 500 lots. You are saving Lot #{csv_lot_number}.")
+
     safe_title = slugify_title(title)
     folder_name = f"{csv_lot_number}_{safe_title}"
     final_dir = make_unique_dir(UPLOADS_DIR, folder_name)
@@ -3770,9 +3826,10 @@ def set_next_lot():
     except Exception:
         data = {}
 
-    data["last_lot"] = last_lot
+    current_auction_id = get_current_auction_id()
+    data[f"last_lot_{current_auction_id}"] = last_lot
     if database_enabled():
-        data["override_last_lot"] = last_lot
+        data[f"override_last_lot_{current_auction_id}"] = last_lot
 
     LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
     flash(f"Next lot number successfully set to {next_lot}.")
@@ -3869,6 +3926,117 @@ def delete_remote_upload():
         )
     else:
         flash(f"No FTP photos were recorded for lot {lot_number}.")
+
+    return redirect(url_for("index"))
+
+
+@app.route("/upload_remote_ftp", methods=["POST"])
+def upload_remote_ftp():
+    lot_number_str = request.form.get("lot_number", "").strip()
+    if not lot_number_str.isdigit():
+        flash("Enter a valid lot number to upload FTP photos.")
+        return redirect(url_for("index"))
+
+    lot_number = int(lot_number_str)
+    image_folder = None
+    auction_number = current_auction_number_for_upload()
+
+    if database_enabled():
+        item = fetch_saved_item(lot_number)
+        if item:
+            image_folder = item.get("image_folder")
+            auction_number = str(item.get("auction_id", auction_number))
+    else:
+        for d in UPLOADS_DIR.iterdir():
+            if d.is_dir() and d.name.startswith(f"{lot_number}_"):
+                image_folder = d.name
+                break
+
+    if not image_folder:
+        flash(f"No image folder found for lot {lot_number}.")
+        return redirect(url_for("index"))
+
+    final_dir = UPLOADS_DIR / image_folder
+    if not final_dir.exists():
+        flash(f"Image folder {final_dir.name} does not exist.")
+        return redirect(url_for("index"))
+
+    local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
+    if not local_jpgs:
+        flash(f"No JPG photos found in {final_dir.name}.")
+        return redirect(url_for("index"))
+
+    if not auction_number:
+        flash("No auction number configured or associated with this lot.")
+        return redirect(url_for("index"))
+
+    try:
+        auction_photo_index = reserve_next_auction_photo_index(auction_number)
+        uploaded_names = upload_lot_photos_to_auctionninja(
+            local_files=local_jpgs,
+            auction_number=auction_number,
+            lot_number=lot_number,
+        )
+        if uploaded_names:
+            record_ftp_upload(lot_number, auction_number, auction_photo_index, uploaded_names)
+            flash(f"Successfully uploaded {len(uploaded_names)} photos for lot {lot_number} to FTP.")
+        else:
+            flash(f"Failed to upload photos for lot {lot_number}.")
+    except Exception as exc:
+        app.logger.exception("FTP upload failed for lot %s", lot_number)
+        flash(f"FTP upload failed for lot {lot_number}: {exc}")
+
+    return redirect(url_for("index"))
+
+
+@app.route("/upload_all_ftp", methods=["POST"])
+def upload_all_ftp():
+    auction_number = current_auction_number_for_upload()
+    if not auction_number:
+        flash("You must set an active AUCTION_NUMBER to upload photos.")
+        return redirect(url_for("index"))
+
+    uploaded_count = 0
+    skipped_count = 0
+
+    if UPLOADS_DIR.exists():
+        for final_dir in UPLOADS_DIR.iterdir():
+            if not final_dir.is_dir():
+                continue
+
+            parts = final_dir.name.split('_', 1)
+            if not parts[0].isdigit():
+                continue
+
+            lot_number = int(parts[0])
+            if get_ftp_upload_record(lot_number):
+                skipped_count += 1
+                continue
+
+            local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
+            if not local_jpgs:
+                continue
+            
+            current_lot_auction = auction_number
+            if database_enabled():
+                item = fetch_saved_item(lot_number)
+                if item and item.get("auction_id"):
+                    current_lot_auction = str(item["auction_id"])
+
+            try:
+                auction_photo_index = reserve_next_auction_photo_index(current_lot_auction)
+                uploaded_names = upload_lot_photos_to_auctionninja(local_jpgs, current_lot_auction, lot_number)
+                if uploaded_names:
+                    record_ftp_upload(lot_number, current_lot_auction, auction_photo_index, uploaded_names)
+                    uploaded_count += 1
+            except Exception as exc:
+                app.logger.exception("FTP upload failed for lot %s", lot_number)
+                flash(f"FTP upload failed for lot {lot_number}: {exc}")
+
+    if uploaded_count > 0:
+        flash(f"Successfully uploaded photos to FTP for {uploaded_count} lot(s). Skipped {skipped_count} already-uploaded lot(s).")
+    else:
+        flash(f"No new lot photos were found to upload. Skipped {skipped_count} already-uploaded lot(s).")
 
     return redirect(url_for("index"))
 
