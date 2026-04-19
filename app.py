@@ -55,15 +55,6 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 EXPORTS_DIR = DATA_DIR / "exports"
-CSV_PATH = DATA_DIR / "auction_items.csv"
-LOT_STATE_PATH = DATA_DIR / "lot_state.json"
-AUCTION_PHOTO_STATE_PATH = DATA_DIR / "auction_photo_state.json"
-FTP_UPLOAD_STATE_PATH = DATA_DIR / "ftp_upload_state.json"
-ACTIVE_DRAFT_STATE_PATH = DATA_DIR / "active_draft.json"
-LOT_LOCK_PATH = DATA_DIR / "lot_state.lock"
-AUCTION_PHOTO_LOCK_PATH = DATA_DIR / "auction_photo_state.lock"
-FTP_UPLOAD_STATE_LOCK_PATH = DATA_DIR / "ftp_upload_state.lock"
-ACTIVE_DRAFT_STATE_LOCK_PATH = DATA_DIR / "active_draft.lock"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -145,8 +136,6 @@ DEFAULT_CATEGORIES = [
 ]
 MAX_IMAGE_DIMENSION = 1800
 JPEG_QUALITY = 85
-LOCK_TIMEOUT_SECONDS = 10
-LOCK_POLL_INTERVAL_SECONDS = 0.1
 
 
 def render_edit_page(
@@ -178,14 +167,6 @@ def render_edit_page(
     )
 
 
-def ensure_active_draft_state() -> None:
-    if database_enabled():
-        ensure_item_store_ready()
-        return
-    if not ACTIVE_DRAFT_STATE_PATH.exists():
-        ACTIVE_DRAFT_STATE_PATH.write_text("{}", encoding="utf-8")
-
-
 def set_active_draft(
     temp_id: str,
     seller_notes: str,
@@ -193,192 +174,134 @@ def set_active_draft(
     form: dict[str, str],
     revision_request: str = "",
 ) -> None:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
 
-        options_json = json.dumps(options)
-        form_json = json.dumps(form)
-        slot_name = f"auction:{get_current_auction_id()}"
+    options_json = json.dumps(options)
+    form_json = json.dumps(form)
+    slot_name = f"auction:{get_current_auction_id()}"
 
-        try:
-            cursor = connection.cursor()
-            if dialect == "sqlite":
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO active_drafts (
-                        slot_name,
-                        temp_id,
-                        seller_notes,
-                        options_json,
-                        form_json,
-                        revision_request,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    """,
-                    (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
-                )
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO active_drafts (
-                        slot_name,
-                        temp_id,
-                        seller_notes,
-                        options_json,
-                        form_json,
-                        revision_request
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        temp_id = VALUES(temp_id),
-                        seller_notes = VALUES(seller_notes),
-                        options_json = VALUES(options_json),
-                        form_json = VALUES(form_json),
-                        revision_request = VALUES(revision_request)
-                    """,
-                    (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
-                )
-            connection.commit()
-        finally:
-            connection.close()
-        return
-
-    with state_lock(ACTIVE_DRAFT_STATE_LOCK_PATH):
-        ensure_active_draft_state()
-        payload = {
-            "temp_id": temp_id,
-            "seller_notes": seller_notes,
-            "options": options,
-            "form": form,
-            "revision_request": revision_request,
-        }
-        ACTIVE_DRAFT_STATE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    try:
+        cursor = connection.cursor()
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO active_drafts (
+                    slot_name,
+                    temp_id,
+                    seller_notes,
+                    options_json,
+                    form_json,
+                    revision_request,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO active_drafts (
+                    slot_name,
+                    temp_id,
+                    seller_notes,
+                    options_json,
+                    form_json,
+                    revision_request
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    temp_id = VALUES(temp_id),
+                    seller_notes = VALUES(seller_notes),
+                    options_json = VALUES(options_json),
+                    form_json = VALUES(form_json),
+                    revision_request = VALUES(revision_request)
+                """,
+                (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
+            )
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def clear_active_draft(temp_id: str | None = None) -> None:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
-        slot_name = f"auction:{get_current_auction_id()}"
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+    slot_name = f"auction:{get_current_auction_id()}"
 
-        try:
-            cursor = connection.cursor()
-            placeholder = "?" if dialect == "sqlite" else "%s"
-            if temp_id:
-                cursor.execute(
-                    f"SELECT temp_id FROM active_drafts WHERE slot_name = {placeholder}",
-                    (slot_name,),
-                )
-                record = cursor.fetchone()
-                current_temp_id = ""
-                if record:
-                    if isinstance(record, sqlite3.Row):
-                        current_temp_id = str(record["temp_id"])
-                    elif isinstance(record, dict):
-                        current_temp_id = str(record.get("temp_id", ""))
-                    else:
-                        current_temp_id = str(record[0])
-                if current_temp_id != temp_id:
-                    return
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        if temp_id:
             cursor.execute(
-                f"DELETE FROM active_drafts WHERE slot_name = {placeholder}",
-                (slot_name,),
-            )
-            connection.commit()
-        finally:
-            connection.close()
-        return
-
-    with state_lock(ACTIVE_DRAFT_STATE_LOCK_PATH):
-        ensure_active_draft_state()
-        try:
-            current = json.loads(ACTIVE_DRAFT_STATE_PATH.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            current = {}
-
-        if temp_id and str(current.get("temp_id", "")).strip() != temp_id:
-            return
-
-        ACTIVE_DRAFT_STATE_PATH.write_text("{}", encoding="utf-8")
-
-
-def get_active_draft() -> dict[str, Any] | None:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
-        slot_name = f"auction:{get_current_auction_id()}"
-
-        try:
-            cursor = connection.cursor()
-            placeholder = "?" if dialect == "sqlite" else "%s"
-            cursor.execute(
-                f"""
-                SELECT temp_id, seller_notes, options_json, form_json, revision_request
-                FROM active_drafts
-                WHERE slot_name = {placeholder}
-                """,
+                f"SELECT temp_id FROM active_drafts WHERE slot_name = {placeholder}",
                 (slot_name,),
             )
             record = cursor.fetchone()
-        finally:
-            connection.close()
+            current_temp_id = ""
+            if record:
+                if isinstance(record, sqlite3.Row):
+                    current_temp_id = str(record["temp_id"])
+                elif isinstance(record, dict):
+                    current_temp_id = str(record.get("temp_id", ""))
+                else:
+                    current_temp_id = str(record[0])
+            if current_temp_id != temp_id:
+                return
+        cursor.execute(
+            f"DELETE FROM active_drafts WHERE slot_name = {placeholder}",
+            (slot_name,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
 
-        if not record:
-            return None
 
-        if isinstance(record, sqlite3.Row):
-            raw = {key: record[key] for key in record.keys()}
-        elif isinstance(record, dict):
-            raw = dict(record)
-        else:
-            return None
+def get_active_draft() -> dict[str, Any] | None:
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+    slot_name = f"auction:{get_current_auction_id()}"
 
-        temp_id = str(raw.get("temp_id", "")).strip()
-        if not temp_id:
-            return None
-
-        try:
-            options = json.loads(str(raw.get("options_json", "[]")))
-            form = json.loads(str(raw.get("form_json", "{}")))
-        except json.JSONDecodeError:
-            clear_active_draft(temp_id=temp_id)
-            return None
-
-        if not isinstance(options, list) or not isinstance(form, dict):
-            clear_active_draft(temp_id=temp_id)
-            return None
-
-        saved_files = load_saved_files_for_temp_id(temp_id)
-        if not saved_files:
-            clear_active_draft(temp_id=temp_id)
-            return None
-
-        return {
-            "temp_id": temp_id,
-            "seller_notes": str(raw.get("seller_notes", "")).strip(),
-            "options": options,
-            "form": form,
-            "revision_request": str(raw.get("revision_request", "")).strip(),
-            "image_files": [p.name for p in saved_files],
-            "image_count": len(saved_files),
-        }
-
-    ensure_active_draft_state()
     try:
-        data = json.loads(ACTIVE_DRAFT_STATE_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        clear_active_draft()
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT temp_id, seller_notes, options_json, form_json, revision_request
+            FROM active_drafts
+            WHERE slot_name = {placeholder}
+            """,
+            (slot_name,),
+        )
+        record = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if not record:
         return None
 
-    if not isinstance(data, dict):
-        clear_active_draft()
+    if isinstance(record, sqlite3.Row):
+        raw = {key: record[key] for key in record.keys()}
+    elif isinstance(record, dict):
+        raw = dict(record)
+    else:
         return None
 
-    temp_id = str(data.get("temp_id", "")).strip()
+    temp_id = str(raw.get("temp_id", "")).strip()
     if not temp_id:
+        return None
+
+    try:
+        options = json.loads(str(raw.get("options_json", "[]")))
+        form = json.loads(str(raw.get("form_json", "{}")))
+    except json.JSONDecodeError:
+        clear_active_draft(temp_id=temp_id)
+        return None
+
+    if not isinstance(options, list) or not isinstance(form, dict):
+        clear_active_draft(temp_id=temp_id)
         return None
 
     saved_files = load_saved_files_for_temp_id(temp_id)
@@ -386,19 +309,12 @@ def get_active_draft() -> dict[str, Any] | None:
         clear_active_draft(temp_id=temp_id)
         return None
 
-    options = data.get("options", [])
-    form = data.get("form", {})
-
-    if not isinstance(options, list) or not isinstance(form, dict):
-        clear_active_draft(temp_id=temp_id)
-        return None
-
     return {
         "temp_id": temp_id,
-        "seller_notes": str(data.get("seller_notes", "")).strip(),
+        "seller_notes": str(raw.get("seller_notes", "")).strip(),
         "options": options,
         "form": form,
-        "revision_request": str(data.get("revision_request", "")).strip(),
+        "revision_request": str(raw.get("revision_request", "")).strip(),
         "image_files": [p.name for p in saved_files],
         "image_count": len(saved_files),
     }
@@ -414,80 +330,11 @@ def current_edit_context(
     return saved_files, options, form
 
 
-def _read_lock_pid(lock_path: Path) -> int | None:
-    try:
-        raw = lock_path.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        return None
-    except OSError:
-        return None
-
-    if not raw.isdigit():
-        return None
-    return int(raw)
-
-
-def _pid_is_running(pid: int) -> bool:
-    if pid <= 0:
-        return False
-
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    else:
-        return True
-
-
-def _clear_stale_lock(lock_path: Path) -> bool:
-    pid = _read_lock_pid(lock_path)
-
-    if pid is not None and _pid_is_running(pid):
-        return False
-
-    try:
-        lock_path.unlink()
-        return True
-    except FileNotFoundError:
-        return True
-    except OSError:
-        return False
-
-
-@contextmanager
-def state_lock(lock_path: Path, timeout_seconds: float = LOCK_TIMEOUT_SECONDS):
-    deadline = time.monotonic() + timeout_seconds
-    lock_fd = None
-
-    while True:
-        try:
-            lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
-            break
-        except OSError as exc:
-            if exc.errno != errno.EEXIST:
-                raise
-            if _clear_stale_lock(lock_path):
-                continue
-            if time.monotonic() >= deadline:
-                raise TimeoutError(f"Timed out waiting for lock: {lock_path.name}")
-            time.sleep(LOCK_POLL_INTERVAL_SECONDS)
-
-    try:
-        os.write(lock_fd, str(os.getpid()).encode("utf-8"))
-        yield
-    finally:
-        if lock_fd is not None:
-            os.close(lock_fd)
-        try:
-            lock_path.unlink()
-        except FileNotFoundError:
-            pass
-
-
 def get_database_url() -> str:
-    return os.getenv("DATABASE_URL", "").strip()
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        return f"sqlite:///{DATA_DIR / 'auction_items.db'}"
+    return url
 
 
 def auth_enabled() -> bool:
@@ -504,23 +351,6 @@ def auth_password() -> str:
 
 def is_authenticated() -> bool:
     return bool(session.get("authenticated"))
-
-
-def database_enabled() -> bool:
-    return bool(get_database_url())
-
-
-def database_label() -> str:
-    database_url = get_database_url()
-    if not database_url:
-        return "Local CSV file"
-
-    scheme = urlparse(database_url).scheme.lower()
-    if scheme.startswith("mysql"):
-        return "MySQL database"
-    if scheme.startswith("sqlite"):
-        return "SQLite database"
-    return "Database"
 
 
 def default_auction_id() -> int:
@@ -592,9 +422,6 @@ def connect_item_store():
 
 
 def ensure_item_store_ready() -> None:
-    if not database_enabled():
-        return
-
     connection, dialect = connect_item_store()
     assert connection is not None
 
@@ -607,11 +434,13 @@ def ensure_item_store_ready() -> None:
                     id INTEGER PRIMARY KEY,
                     status TEXT NOT NULL,
                     is_current INTEGER NOT NULL DEFAULT 0,
+                    last_lot_override INTEGER,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            _ensure_sqlite_column(cursor, "auctions", "last_lot_override", "INTEGER")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS auction_items (
@@ -706,11 +535,13 @@ def ensure_item_store_ready() -> None:
                     id INT PRIMARY KEY,
                     status VARCHAR(32) NOT NULL,
                     is_current TINYINT(1) NOT NULL DEFAULT 0,
+                    last_lot_override INT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
                 """
             )
+            _ensure_mysql_column(cursor, "auctions", "last_lot_override", "INT NULL")
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS auction_items (
@@ -924,9 +755,6 @@ def _backfill_auction_scope(cursor, dialect: str) -> None:
 
 
 def get_current_auction() -> dict[str, str] | None:
-    if not database_enabled():
-        return None
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -968,9 +796,6 @@ def get_current_auction() -> dict[str, str] | None:
 
 
 def get_current_auction_id() -> int:
-    if not database_enabled():
-        return default_auction_id()
-
     auction = get_current_auction()
     if not auction:
         return default_auction_id()
@@ -978,9 +803,6 @@ def get_current_auction_id() -> int:
 
 
 def list_auctions() -> list[dict[str, str]]:
-    if not database_enabled():
-        return []
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1008,9 +830,6 @@ def list_auctions() -> list[dict[str, str]]:
 
 
 def fetch_auction_summaries() -> list[dict[str, str]]:
-    if not database_enabled():
-        return []
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1265,21 +1084,6 @@ def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
 
 def fetch_last_lot_from_store() -> int:
     current_auction_id = get_current_auction_id()
-    override_key = f"override_last_lot_{current_auction_id}"
-    
-    ensure_lot_state()
-    try:
-        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        if override_key in data:
-            return int(data[override_key])
-    except Exception:
-        pass
-
-    if not database_enabled():
-        ensure_lot_state()
-        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        return int(data.get(f"last_lot_{current_auction_id}", DEFAULT_STARTING_LOT))
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1287,19 +1091,22 @@ def fetch_last_lot_from_store() -> int:
     try:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
+
+        cursor.execute(f"SELECT last_lot_override FROM auctions WHERE id = {placeholder}", (current_auction_id,))
+        row_override = cursor.fetchone()
+        override_lot = 0
+        if row_override and row_override[0] is not None:
+            override_lot = int(row_override[0])
+
         cursor.execute(f"SELECT MAX(lot_number) AS max_lot FROM auction_items WHERE auction_id = {placeholder}", (current_auction_id,))
-        row = cursor.fetchone()
+        row_max = cursor.fetchone()
+        max_lot = 0
+        if row_max and row_max[0] is not None:
+            max_lot = int(row_max[0])
     finally:
         connection.close()
 
-    if isinstance(row, sqlite3.Row):
-        max_lot = row["max_lot"]
-    elif isinstance(row, dict):
-        max_lot = row.get("max_lot")
-    else:
-        max_lot = row[0] if row else None
-
-    return int(max_lot or DEFAULT_STARTING_LOT)
+    return max(override_lot, max_lot, DEFAULT_STARTING_LOT)
 
 
 def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: str) -> dict[str, str]:
@@ -1328,27 +1135,6 @@ def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: s
 
 
 def append_item_record(record: dict[str, str]) -> None:
-    if not database_enabled():
-        row = [
-            record["lot_number"],
-            record["title"],
-            record["description"],
-            record["condition_notes"],
-            record["low_estimate"],
-            record["high_estimate"],
-            record["dimensions_length"],
-            record["dimensions_depth"],
-            record["dimensions_height"],
-            record["tags"],
-            record["reference_number"],
-            record["item_notes"],
-            record["consigner_number"],
-            record["shipping_available"],
-            record["category"],
-        ]
-        append_csv_row(row)
-        return
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1407,7 +1193,7 @@ def append_item_record(record: dict[str, str]) -> None:
 
 
 def mark_lots_as_published(lot_numbers: list[int], export_batch_name: str) -> None:
-    if not lot_numbers or not database_enabled():
+    if not lot_numbers:
         return
 
     ensure_item_store_ready()
@@ -1457,12 +1243,6 @@ def mark_lots_as_published(lot_numbers: list[int], export_batch_name: str) -> No
 
 
 def fetch_export_rows() -> list[list[str]]:
-    if not database_enabled():
-        ensure_csv_exists()
-        with CSV_PATH.open("r", newline="", encoding="utf-8") as handle:
-            rows = list(csv.reader(handle))
-        return rows[1:]
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1519,9 +1299,6 @@ def normalize_manage_filter(raw_filter: str) -> str:
 
 
 def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
-    if not database_enabled():
-        return []
-
     normalized_filter = normalize_manage_filter(status_filter)
     statuses = MANAGE_ITEM_FILTERS[normalized_filter]
 
@@ -1570,9 +1347,6 @@ def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
 
 
 def fetch_manage_item_counts() -> dict[str, int]:
-    if not database_enabled():
-        return {key: 0 for key in MANAGE_ITEM_FILTERS}
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1623,7 +1397,7 @@ def fetch_manage_item_counts() -> dict[str, int]:
 
 
 def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str, str]]:
-    if not database_enabled() or not statuses:
+    if not statuses:
         return []
 
     ensure_item_store_ready()
@@ -1669,9 +1443,6 @@ def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str,
 
 
 def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
-    if not database_enabled():
-        return None
-        
     current_auction_id = get_current_auction_id()
 
     ensure_item_store_ready()
@@ -1895,9 +1666,6 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
 
 
 def mark_item_removed(lot_number: int) -> bool:
-    if not database_enabled():
-        return False
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1941,9 +1709,6 @@ def restored_status_for_item(item: dict[str, str]) -> str:
 
 
 def restore_removed_item(lot_number: int) -> str | None:
-    if not database_enabled():
-        return None
-
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") != ITEM_STATUS_REMOVED:
         return None
@@ -1988,7 +1753,7 @@ def restore_removed_item(lot_number: int) -> str | None:
 
 
 def set_items_status(lot_numbers: list[int], target_status: str) -> int:
-    if not database_enabled() or not lot_numbers:
+    if not lot_numbers:
         return 0
 
     ensure_item_store_ready()
@@ -2037,14 +1802,6 @@ def bulk_restore_items(lot_numbers: list[int]) -> int:
 def fetch_export_rows_for_lots(lot_numbers: list[int]) -> list[list[str]]:
     if not lot_numbers:
         return []
-
-    if not database_enabled():
-        ensure_csv_exists()
-        wanted = {str(lot_number) for lot_number in lot_numbers}
-        with CSV_PATH.open("r", newline="", encoding="utf-8") as handle:
-            reader = csv.reader(handle)
-            next(reader, None)
-            return [row for row in reader if row and row[0] in wanted]
 
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
@@ -2103,65 +1860,22 @@ def lot_numbers_from_rows(rows: list[list[str]]) -> list[int]:
             lot_numbers.append(int(row[0]))
     return lot_numbers
 
-def ensure_lot_state() -> None:
-    if not LOT_STATE_PATH.exists():
-        LOT_STATE_PATH.write_text(
-            json.dumps({"last_lot": DEFAULT_STARTING_LOT}, indent=2),
-            encoding="utf-8",
-        )
-
-
 def get_last_lot() -> int:
     return fetch_last_lot_from_store()
 
 
 def get_next_lot_preview() -> int:
     candidate = get_last_lot() + 1
-    if database_enabled():
-        while fetch_saved_item(candidate) is not None:
-            candidate += 1
+    while fetch_saved_item(candidate) is not None:
+        candidate += 1
     return candidate
 
 
 def reserve_next_lot() -> int:
-    current_auction_id = get_current_auction_id()
-    with state_lock(LOT_LOCK_PATH):
-        if database_enabled():
-            candidate = fetch_last_lot_from_store() + 1
-            
-            # Auto-skip occupied lot numbers
-            while fetch_saved_item(candidate) is not None:
-                candidate += 1
-
-            try:
-                ensure_lot_state()
-                data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-                data[f"override_last_lot_{current_auction_id}"] = candidate
-                LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            except Exception:
-                pass
-            return candidate
-
-        ensure_lot_state()
-        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-        next_lot = int(data.get(f"last_lot_{current_auction_id}", DEFAULT_STARTING_LOT)) + 1
-        data[f"last_lot_{current_auction_id}"] = next_lot
-        LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        return next_lot
-
-
-def ensure_csv_exists() -> None:
-    if not CSV_PATH.exists():
-        with CSV_PATH.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(CSV_HEADER)
-
-
-def append_csv_row(row: list[str]) -> None:
-    ensure_csv_exists()
-    with CSV_PATH.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(row)
+    candidate = fetch_last_lot_from_store() + 1
+    while fetch_saved_item(candidate) is not None:
+        candidate += 1
+    return candidate
 
 
 def slugify_title(title: str, max_length: int = 80) -> str:
@@ -2276,169 +1990,138 @@ def save_uploaded_files_to_dir(uploaded_files, temp_dir: Path) -> list[Path]:
 
     return saved_files
 
-def ensure_auction_photo_state() -> None:
-    if not AUCTION_PHOTO_STATE_PATH.exists():
-        AUCTION_PHOTO_STATE_PATH.write_text("{}", encoding="utf-8")
-
 
 def get_next_auction_photo_index(auction_number: str) -> int:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
 
-        try:
-            cursor = connection.cursor()
-            placeholder = "?" if dialect == "sqlite" else "%s"
-            cursor.execute(
-                f"""
-                SELECT last_index
-                FROM auction_photo_counters
-                WHERE auction_number = {placeholder}
-                """,
-                (str(auction_number),),
-            )
-            row = cursor.fetchone()
-        finally:
-            connection.close()
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT last_index
+            FROM auction_photo_counters
+            WHERE auction_number = {placeholder}
+            """,
+            (str(auction_number),),
+        )
+        row = cursor.fetchone()
+    finally:
+        connection.close()
 
-        if not row:
-            return 1
-        if isinstance(row, sqlite3.Row):
-            current = int(row["last_index"])
-        elif isinstance(row, dict):
-            current = int(row.get("last_index", 0))
-        else:
-            current = int(row[0])
-        return current + 1
-
-    ensure_auction_photo_state()
-    data = json.loads(AUCTION_PHOTO_STATE_PATH.read_text(encoding="utf-8"))
-    current = int(data.get(str(auction_number), 0))
+    if not row:
+        return 1
+    if isinstance(row, sqlite3.Row):
+        current = int(row["last_index"])
+    elif isinstance(row, dict):
+        current = int(row.get("last_index", 0))
+    else:
+        current = int(row[0])
     return current + 1
 
 
 def reserve_next_auction_photo_index(auction_number: str) -> int:
-    with state_lock(AUCTION_PHOTO_LOCK_PATH):
-        if database_enabled():
-            ensure_item_store_ready()
-            connection, dialect = connect_item_store()
-            assert connection is not None
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
 
-            try:
-                cursor = connection.cursor()
-                placeholder = "?" if dialect == "sqlite" else "%s"
-                cursor.execute(
-                    f"""
-                    SELECT last_index
-                    FROM auction_photo_counters
-                    WHERE auction_number = {placeholder}
-                    """,
-                    (str(auction_number),),
-                )
-                row = cursor.fetchone()
-                current = 0
-                if row:
-                    if isinstance(row, sqlite3.Row):
-                        current = int(row["last_index"])
-                    elif isinstance(row, dict):
-                        current = int(row.get("last_index", 0))
-                    else:
-                        current = int(row[0])
-                next_index = current + 1
-
-                if dialect == "sqlite":
-                    cursor.execute(
-                        """
-                        INSERT OR REPLACE INTO auction_photo_counters (
-                            auction_number,
-                            last_index,
-                            updated_at
-                        ) VALUES (?, ?, CURRENT_TIMESTAMP)
-                        """,
-                        (str(auction_number), next_index),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        INSERT INTO auction_photo_counters (
-                            auction_number,
-                            last_index
-                        ) VALUES (%s, %s)
-                        ON DUPLICATE KEY UPDATE
-                            last_index = VALUES(last_index)
-                        """,
-                        (str(auction_number), next_index),
-                    )
-                connection.commit()
-                return next_index
-            finally:
-                connection.close()
-
-        ensure_auction_photo_state()
-        data = json.loads(AUCTION_PHOTO_STATE_PATH.read_text(encoding="utf-8"))
-        current = int(data.get(str(auction_number), 0))
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT last_index
+            FROM auction_photo_counters
+            WHERE auction_number = {placeholder}
+            """,
+            (str(auction_number),),
+        )
+        row = cursor.fetchone()
+        current = 0
+        if row:
+            if isinstance(row, sqlite3.Row):
+                current = int(row["last_index"])
+            elif isinstance(row, dict):
+                current = int(row.get("last_index", 0))
+            else:
+                current = int(row[0])
         next_index = current + 1
-        data[str(auction_number)] = next_index
-        AUCTION_PHOTO_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO auction_photo_counters (
+                    auction_number,
+                    last_index,
+                    updated_at
+                ) VALUES (?, ?, CURRENT_TIMESTAMP)
+                """,
+                (str(auction_number), next_index),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO auction_photo_counters (
+                    auction_number,
+                    last_index
+                ) VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE
+                    last_index = VALUES(last_index)
+                """,
+                (str(auction_number), next_index),
+            )
+        connection.commit()
         return next_index
-
-
-def ensure_ftp_upload_state() -> None:
-    if not FTP_UPLOAD_STATE_PATH.exists():
-        FTP_UPLOAD_STATE_PATH.write_text("{}", encoding="utf-8")
+    finally:
+        connection.close()
 
 
 def get_ftp_upload_record(lot_number: int | str) -> dict[str, object] | None:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
 
-        try:
-            cursor = connection.cursor()
-            placeholder = "?" if dialect == "sqlite" else "%s"
-            current_auction_id = get_current_auction_id()
-            cursor.execute(
-                f"""
-                SELECT lot_number, auction_id, auction_number, auction_photo_index, remote_names
-                FROM ftp_uploads
-                WHERE lot_number = {placeholder} AND auction_id = {placeholder}
-                """,
-                (int(lot_number), current_auction_id),
-            )
-            record = cursor.fetchone()
-        finally:
-            connection.close()
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        current_auction_id = get_current_auction_id()
+        cursor.execute(
+            f"""
+            SELECT lot_number, auction_id, auction_number, auction_photo_index, remote_names
+            FROM ftp_uploads
+            WHERE lot_number = {placeholder} AND auction_id = {placeholder}
+            """,
+            (int(lot_number), current_auction_id),
+        )
+        record = cursor.fetchone()
+    finally:
+        connection.close()
 
-        if not record:
-            return None
+    if not record:
+        return None
 
-        if isinstance(record, sqlite3.Row):
-            row = {key: record[key] for key in record.keys()}
-        elif isinstance(record, dict):
-            row = dict(record)
-        else:
-            return None
+    if isinstance(record, sqlite3.Row):
+        row = {key: record[key] for key in record.keys()}
+    elif isinstance(record, dict):
+        row = dict(record)
+    else:
+        return None
 
-        remote_names = row.get("remote_names", "")
-        if isinstance(remote_names, str):
-            remote_names_list = [name for name in remote_names.split(",") if name]
-        else:
-            remote_names_list = list(remote_names)
+    remote_names = row.get("remote_names", "")
+    if isinstance(remote_names, str):
+        remote_names_list = [name for name in remote_names.split(",") if name]
+    else:
+        remote_names_list = list(remote_names)
 
-        return {
-            "lot_number": int(row.get("lot_number", lot_number)),
-            "auction_id": int(row.get("auction_id", 0) or 0),
-            "auction_number": str(row.get("auction_number", "")),
-            "auction_photo_index": int(row.get("auction_photo_index", 0)),
-            "remote_names": remote_names_list,
-        }
-
-    ensure_ftp_upload_state()
-    data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
-    record = data.get(str(lot_number))
-    return record if isinstance(record, dict) else None
+    return {
+        "lot_number": int(row.get("lot_number", lot_number)),
+        "auction_id": int(row.get("auction_id", 0) or 0),
+        "auction_number": str(row.get("auction_number", "")),
+        "auction_photo_index": int(row.get("auction_photo_index", 0)),
+        "remote_names": remote_names_list,
+    }
 
 
 def record_ftp_upload(
@@ -2447,99 +2130,79 @@ def record_ftp_upload(
     auction_photo_index: int,
     remote_names: list[str],
 ) -> None:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
 
-        serialized_remote_names = ",".join(remote_names)
-        current_auction_id = get_current_auction_id()
+    serialized_remote_names = ",".join(remote_names)
+    current_auction_id = get_current_auction_id()
 
-        try:
-            cursor = connection.cursor()
-            if dialect == "sqlite":
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO ftp_uploads (
-                        lot_number,
-                        auction_id,
-                        auction_number,
-                        auction_photo_index,
-                        remote_names
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        lot_number,
-                        current_auction_id,
-                        str(auction_number),
-                        int(auction_photo_index),
-                        serialized_remote_names,
-                    ),
-                )
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO ftp_uploads (
-                        lot_number,
-                        auction_id,
-                        auction_number,
-                        auction_photo_index,
-                        remote_names
-                    ) VALUES (%s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        auction_id = VALUES(auction_id),
-                        auction_number = VALUES(auction_number),
-                        auction_photo_index = VALUES(auction_photo_index),
-                        remote_names = VALUES(remote_names)
-                    """,
-                    (
-                        lot_number,
-                        current_auction_id,
-                        str(auction_number),
-                        int(auction_photo_index),
-                        serialized_remote_names,
-                    ),
-                )
-            connection.commit()
-        finally:
-            connection.close()
-        return
-
-    with state_lock(FTP_UPLOAD_STATE_LOCK_PATH):
-        ensure_ftp_upload_state()
-        data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
-        data[str(lot_number)] = {
-            "auction_number": str(auction_number),
-            "auction_photo_index": int(auction_photo_index),
-            "remote_names": list(remote_names),
-        }
-        FTP_UPLOAD_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    try:
+        cursor = connection.cursor()
+        if dialect == "sqlite":
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO ftp_uploads (
+                    lot_number,
+                    auction_id,
+                    auction_number,
+                    auction_photo_index,
+                    remote_names
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    lot_number,
+                    current_auction_id,
+                    str(auction_number),
+                    int(auction_photo_index),
+                    serialized_remote_names,
+                ),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO ftp_uploads (
+                    lot_number,
+                    auction_id,
+                    auction_number,
+                    auction_photo_index,
+                    remote_names
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    auction_id = VALUES(auction_id),
+                    auction_number = VALUES(auction_number),
+                    auction_photo_index = VALUES(auction_photo_index),
+                    remote_names = VALUES(remote_names)
+                """,
+                (
+                    lot_number,
+                    current_auction_id,
+                    str(auction_number),
+                    int(auction_photo_index),
+                    serialized_remote_names,
+                ),
+            )
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def delete_ftp_upload_record(lot_number: int | str) -> None:
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
 
-        try:
-            cursor = connection.cursor()
-            placeholder = "?" if dialect == "sqlite" else "%s"
-            current_auction_id = get_current_auction_id()
-            cursor.execute(
-                f"DELETE FROM ftp_uploads WHERE lot_number = {placeholder} AND auction_id = {placeholder}",
-                (int(lot_number), current_auction_id),
-            )
-            connection.commit()
-        finally:
-            connection.close()
-        return
-
-    with state_lock(FTP_UPLOAD_STATE_LOCK_PATH):
-        ensure_ftp_upload_state()
-        data = json.loads(FTP_UPLOAD_STATE_PATH.read_text(encoding="utf-8"))
-        data.pop(str(lot_number), None)
-        FTP_UPLOAD_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        current_auction_id = get_current_auction_id()
+        cursor.execute(
+            f"DELETE FROM ftp_uploads WHERE lot_number = {placeholder} AND auction_id = {placeholder}",
+            (int(lot_number), current_auction_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def connect_ftp():
@@ -2800,9 +2463,6 @@ def record_export_batch(
     lot_numbers: list[int],
     archive_path: Path,
 ) -> None:
-    if not database_enabled():
-        return
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -2867,70 +2527,51 @@ def record_export_batch(
 
 def list_export_archives() -> list[dict[str, str]]:
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    if database_enabled():
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
-        current_auction_id = get_current_auction_id()
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+    current_auction_id = get_current_auction_id()
 
-        try:
-            cursor = connection.cursor()
-            cursor.execute(
-                f"""
-                SELECT auction_id, filename, export_type, lot_numbers, lot_count, archive_path, created_at
-                FROM export_batches
-                WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
-                ORDER BY created_at DESC, id DESC
-                """,
-                (current_auction_id,),
-            )
-            records = cursor.fetchall()
-        finally:
-            connection.close()
-
-        archives: list[dict[str, str]] = []
-        for record in records:
-            if isinstance(record, sqlite3.Row):
-                row = {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
-            elif isinstance(record, dict):
-                row = {key: "" if value is None else str(value) for key, value in record.items()}
-            else:
-                continue
-            archive_file = EXPORTS_DIR / row["archive_path"]
-            size_bytes = archive_file.stat().st_size if archive_file.exists() else 0
-            archives.append(
-                {
-                    "filename": row["filename"],
-                    "auction_id": row["auction_id"],
-                    "export_type": row["export_type"],
-                    "lot_numbers": row["lot_numbers"],
-                    "lot_count": row["lot_count"],
-                    "modified_at": row["created_at"],
-                    "size_bytes": str(size_bytes),
-                }
-            )
-        return archives
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            f"""
+            SELECT auction_id, filename, export_type, lot_numbers, lot_count, archive_path, created_at
+            FROM export_batches
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
+            ORDER BY created_at DESC, id DESC
+            """,
+            (current_auction_id,),
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
 
     archives: list[dict[str, str]] = []
-    for path in sorted(EXPORTS_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime, reverse=True):
-        stat = path.stat()
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            row = {key: "" if record[key] is None else str(record[key]) for key in record.keys()}
+        elif isinstance(record, dict):
+            row = {key: "" if value is None else str(value) for key, value in record.items()}
+        else:
+            continue
+        archive_file = EXPORTS_DIR / row["archive_path"]
+        size_bytes = archive_file.stat().st_size if archive_file.exists() else 0
         archives.append(
             {
-                "filename": path.name,
-                "export_type": "archived",
-                "lot_numbers": "",
-                "lot_count": "0",
-                "size_bytes": str(stat.st_size),
-                "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
+                "filename": row["filename"],
+                "auction_id": row["auction_id"],
+                "export_type": row["export_type"],
+                "lot_numbers": row["lot_numbers"],
+                "lot_count": row["lot_count"],
+                "modified_at": row["created_at"],
+                "size_bytes": str(size_bytes),
             }
         )
     return archives
 
 
 def fetch_export_batch(filename: str) -> dict[str, str] | None:
-    if not database_enabled():
-        return None
-
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -2963,7 +2604,7 @@ def fetch_export_batch(filename: str) -> dict[str, str] | None:
 
 
 def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
-    if not database_enabled() or not lot_numbers:
+    if not lot_numbers:
         return []
 
     ensure_item_store_ready()
@@ -3001,9 +2642,7 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
 
 
 def current_auction_number_for_upload() -> str:
-    if database_enabled():
-        return str(get_current_auction_id())
-    return os.getenv("AUCTION_NUMBER", "").strip()
+    return str(get_current_auction_id())
 
 
 @app.before_request
@@ -3033,15 +2672,6 @@ def healthz():
 
 @app.context_processor
 def inject_auction_context() -> dict[str, Any]:
-    if not database_enabled():
-        return {
-            "current_auction": None,
-            "auction_list": [],
-            "auction_statuses": [],
-            "auth_enabled": auth_enabled(),
-            "is_authenticated": is_authenticated(),
-        }
-
     return {
         "current_auction": get_current_auction(),
         "auction_list": list_auctions(),
@@ -3057,10 +2687,6 @@ def inject_auction_context() -> dict[str, Any]:
 
 @app.route("/auctions/create_next", methods=["POST"])
 def create_auction_route():
-    if not database_enabled():
-        flash("Auction management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     auction = create_next_auction()
     flash(f"Created auction {auction['id']} and switched to it.")
     return redirect(request.form.get("return_to") or url_for("dashboard"))
@@ -3068,10 +2694,6 @@ def create_auction_route():
 
 @app.route("/auctions/switch", methods=["POST"])
 def switch_auction_route():
-    if not database_enabled():
-        flash("Auction management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     auction_id = request.form.get("auction_id", "").strip()
     if not auction_id.isdigit() or not switch_current_auction(int(auction_id)):
         flash("Choose a valid auction to switch to.")
@@ -3083,10 +2705,6 @@ def switch_auction_route():
 
 @app.route("/auctions/status", methods=["POST"])
 def update_auction_status_route():
-    if not database_enabled():
-        flash("Auction management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     auction_id = request.form.get("auction_id", "").strip()
     status = request.form.get("status", "").strip().lower()
     if not auction_id.isdigit() or not update_auction_status(int(auction_id), status):
@@ -3129,19 +2747,12 @@ def index():
     return render_template(
         "index.html",
         next_lot=get_next_lot_preview(),
-        csv_path=CSV_PATH.name,
         active_draft=active_draft,
-        database_enabled=database_enabled(),
-        storage_label=database_label(),
     )
 
 
 @app.route("/dashboard", methods=["GET"])
 def dashboard():
-    if not database_enabled():
-        flash("The auction dashboard is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     return render_template(
         "dashboard.html",
         counts=fetch_manage_item_counts(),
@@ -3153,10 +2764,6 @@ def dashboard():
 
 @app.route("/auctions", methods=["GET"])
 def auctions_overview():
-    if not database_enabled():
-        flash("Auction management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     return render_template(
         "auctions.html",
         auctions=fetch_auction_summaries(),
@@ -3169,9 +2776,6 @@ def export_csv():
     if not rows:
         flash("There are no saved items to export yet.")
         return redirect(url_for("index"))
-
-    if not database_enabled() and CSV_PATH.exists():
-        return send_file(CSV_PATH, as_attachment=True, download_name=CSV_PATH.name)
 
     filename = f"auction_{get_current_auction_id()}_items_export_{time.strftime('%Y%m%d')}.csv"
     csv_text = build_csv_text(rows)
@@ -3196,10 +2800,6 @@ def export_csv():
 
 @app.route("/manage_items", methods=["GET"])
 def manage_items():
-    if not database_enabled():
-        flash("Batch item management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     current_filter = normalize_manage_filter(request.args.get("status", "active"))
     items = fetch_manage_items(current_filter)
     filter_counts = fetch_manage_item_counts()
@@ -3213,10 +2813,6 @@ def manage_items():
 
 @app.route("/exports", methods=["GET"])
 def export_history():
-    if not database_enabled():
-        flash("Export history is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     return render_template(
         "export_history.html",
         archives=list_export_archives(),
@@ -3225,10 +2821,6 @@ def export_history():
 
 @app.route("/exports/<path:filename>/details", methods=["GET"])
 def export_batch_details(filename: str):
-    if not database_enabled():
-        flash("Export history is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     safe_name = Path(filename).name
     batch = fetch_export_batch(safe_name)
     if not batch:
@@ -3256,10 +2848,6 @@ def download_export_archive(filename: str):
 
 @app.route("/items/<int:lot_number>/edit", methods=["GET"])
 def edit_saved_item(lot_number: int):
-    if not database_enabled():
-        flash("Saved item editing is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") == ITEM_STATUS_REMOVED:
         flash(f"Lot {lot_number} was not found.")
@@ -3281,10 +2869,6 @@ def edit_saved_item(lot_number: int):
 @app.route("/items/<int:lot_number>/update", methods=["POST"])
 def update_saved_item(lot_number: int):
     current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
-    if not database_enabled():
-        flash("Saved item editing is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") == ITEM_STATUS_REMOVED:
         flash(f"Lot {lot_number} was not found.")
@@ -3334,10 +2918,6 @@ def update_saved_item(lot_number: int):
 @app.route("/items/<int:lot_number>/remove", methods=["POST"])
 def remove_saved_item(lot_number: int):
     current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
-    if not database_enabled():
-        flash("Saved item management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     item = fetch_saved_item(lot_number)
     if not item or item.get("status") == ITEM_STATUS_REMOVED:
         flash(f"Lot {lot_number} was not found.")
@@ -3353,10 +2933,6 @@ def remove_saved_item(lot_number: int):
 @app.route("/items/<int:lot_number>/move", methods=["POST"])
 def move_saved_item(lot_number: int):
     current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
-    if not database_enabled():
-        flash("Saved item management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     target_auction_id = request.form.get("auction_id", "").strip()
     if not target_auction_id.isdigit():
         flash("Choose a valid auction to move this lot.")
@@ -3375,10 +2951,6 @@ def move_saved_item(lot_number: int):
 @app.route("/items/<int:lot_number>/restore", methods=["POST"])
 def restore_saved_item(lot_number: int):
     current_filter = normalize_manage_filter(request.form.get("current_filter", "removed"))
-    if not database_enabled():
-        flash("Saved item management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     restored_status = restore_removed_item(lot_number)
     if restored_status == ITEM_STATUS_NEEDS_UPDATE:
         flash(f"Restored lot {lot_number}. It is marked needs_update because it had already been published before removal.")
@@ -3391,10 +2963,6 @@ def restore_saved_item(lot_number: int):
 
 @app.route("/items/bulk_action", methods=["POST"])
 def bulk_update_items():
-    if not database_enabled():
-        flash("Saved item management is available when DATABASE_URL is configured.")
-        return redirect(url_for("index"))
-
     current_filter = normalize_manage_filter(request.form.get("current_filter", "active"))
     selected_lots = sorted(
         {
@@ -3798,14 +3366,10 @@ def save():
             + ", ".join(uploaded_names)
         )
     else:
-        if database_enabled():
-            flash(
-                f"Saved lot {csv_lot_number} to the database. "
-                f"Download the AuctionNinja CSV from the home page when ready. "
-                f"Images stored in: {final_dir.name}"
-            )
-        else:
-            flash(f"Saved lot {csv_lot_number}. Images stored in: {final_dir.name}")
+        flash(
+            f"Saved lot {csv_lot_number} to the database. "
+            f"Images stored in: {final_dir.name}"
+        )
 
     return redirect(url_for("index"))
 
@@ -3825,18 +3389,28 @@ def set_next_lot():
     next_lot = int(next_lot_str)
     last_lot = next_lot - 1
 
-    ensure_lot_state()
+        current_auction_id = get_current_auction_id()
+        ensure_item_store_ready()
+        connection, dialect = connect_item_store()
+        assert connection is not None
+        
     try:
-        data = json.loads(LOT_STATE_PATH.read_text(encoding="utf-8"))
-    except Exception:
-        data = {}
+            cursor = connection.cursor()
+            placeholder = "?" if dialect == "sqlite" else "%s"
+            if dialect == "sqlite":
+                cursor.execute(
+                    f"UPDATE auctions SET last_lot_override = {placeholder}, updated_at = CURRENT_TIMESTAMP WHERE id = {placeholder}",
+                    (last_lot, current_auction_id)
+                )
+            else:
+                cursor.execute(
+                    f"UPDATE auctions SET last_lot_override = {placeholder} WHERE id = {placeholder}",
+                    (last_lot, current_auction_id)
+                )
+            connection.commit()
+        finally:
+            connection.close()
 
-    current_auction_id = get_current_auction_id()
-    data[f"last_lot_{current_auction_id}"] = last_lot
-    if database_enabled():
-        data[f"override_last_lot_{current_auction_id}"] = last_lot
-
-    LOT_STATE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
     flash(f"Next lot number successfully set to {next_lot}.")
     return redirect(request.referrer or url_for("index"))
 
@@ -3946,16 +3520,10 @@ def upload_remote_ftp():
     image_folder = None
     auction_number = current_auction_number_for_upload()
 
-    if database_enabled():
-        item = fetch_saved_item(lot_number)
-        if item:
-            image_folder = item.get("image_folder")
-            auction_number = str(item.get("auction_id", auction_number))
-    else:
-        for d in UPLOADS_DIR.iterdir():
-            if d.is_dir() and d.name.startswith(f"{lot_number}_"):
-                image_folder = d.name
-                break
+    item = fetch_saved_item(lot_number)
+    if item:
+        image_folder = item.get("image_folder")
+        auction_number = str(item.get("auction_id", auction_number))
 
     if not image_folder:
         flash(f"No image folder found for lot {lot_number}.")
@@ -4023,13 +3591,12 @@ def ftp_preview():
             current_lot_auction = auction_number
             item_title = ""
             item_description = ""
-            if database_enabled():
-                item = fetch_saved_item(lot_number)
-                if item:
-                    if item.get("auction_id"):
-                        current_lot_auction = str(item["auction_id"])
-                    item_title = item.get("title", "")
-                    item_description = item.get("description", "")
+            item = fetch_saved_item(lot_number)
+            if item:
+                if item.get("auction_id"):
+                    current_lot_auction = str(item["auction_id"])
+                item_title = item.get("title", "")
+                item_description = item.get("description", "")
 
             files_info = []
             for i, p in enumerate(local_jpgs, start=1):
@@ -4121,3 +3688,4 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     debug = os.getenv("FLASK_DEBUG", "true").lower() == "true"
     app.run(host=host, port=port, debug=debug)
+

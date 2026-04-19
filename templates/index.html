@@ -576,12 +576,10 @@
         <div class="button-row">
           <button type="submit" id="analyzeButton">Analyze</button>
           <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download Auction {{ current_auction.id if current_auction else '' }} CSV</a>
-          {% if database_enabled %}
-            <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
-            <a class="button-link secondary" href="{{ url_for('dashboard') }}">Auction Dashboard</a>
-            <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>
-            <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
-          {% endif %}
+          <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
+          <a class="button-link secondary" href="{{ url_for('dashboard') }}">Auction Dashboard</a>
+          <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>
+          <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
           {% if auth_enabled and is_authenticated %}
             <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
               <button type="submit" class="secondary">Sign Out</button>
@@ -591,7 +589,7 @@
       </form>
 
       <div class="footer-note">
-        Item storage: {{ storage_label }}{% if database_enabled %}. Export a fresh CSV when you are ready to import lots into AuctionNinja.{% else %}. CSV file: {{ csv_path }}{% endif %}
+        Item storage: Local database. Export a fresh CSV when you are ready to import lots into AuctionNinja.
       </div>
 
       <div class="danger-section">
