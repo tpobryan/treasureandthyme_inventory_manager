@@ -402,7 +402,14 @@ def connect_item_store():
     raise ValueError("DATABASE_URL must use sqlite:/// or mysql:// syntax.")
 
 
+_DB_INITIALIZED = False
+
+
 def ensure_item_store_ready() -> None:
+    global _DB_INITIALIZED
+    if _DB_INITIALIZED:
+        return
+
     connection, dialect = connect_item_store()
     assert connection is not None
 
@@ -611,6 +618,7 @@ def ensure_item_store_ready() -> None:
             _bootstrap_auction_rows(cursor, dialect)
             _backfill_auction_scope(cursor, dialect)
         connection.commit()
+        _DB_INITIALIZED = True
     finally:
         connection.close()
 
@@ -2146,7 +2154,6 @@ def delete_ftp_upload_record(lot_number: int | str) -> None:
     try:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
-        current_auction_id = get_current_auction_id()
         cursor.execute(
             f"DELETE FROM ftp_uploads WHERE lot_number = {placeholder} AND auction_id = {placeholder}",
             (int(lot_number), current_auction_id),
