@@ -2611,7 +2611,6 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
-    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
