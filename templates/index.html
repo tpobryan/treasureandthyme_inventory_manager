@@ -580,6 +580,7 @@
           <a class="button-link secondary" href="{{ url_for('dashboard') }}">Auction Dashboard</a>
           <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>
           <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
+          <a class="button-link secondary" href="{{ url_for('admin') }}">Admin</a>
           {% if auth_enabled and is_authenticated %}
             <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
               <button type="submit" class="secondary">Sign Out</button>
@@ -590,73 +591,6 @@
 
       <div class="footer-note">
         Item storage: Local database. Export a fresh CSV when you are ready to import lots into AuctionNinja.
-      </div>
-
-      <div class="danger-section">
-        <div class="danger-card" style="border-color: #93c5fd; background: #eff6ff;">
-          <p class="danger-title" style="color: #1d4ed8;">Upload FTP Photos By Lot Number</p>
-          <p class="danger-copy" style="color: #1e3a8a;">
-            Retroactively upload photos for a specific saved lot to the AuctionNinja FTP server.
-          </p>
-          <form action="{{ url_for('upload_remote_ftp') }}" method="post">
-            <div class="danger-row">
-              <div class="field" style="margin-bottom:0;">
-                <label for="upload_lot_number" style="color: #1e3a8a;">Lot Number</label>
-                <input
-                  id="upload_lot_number"
-                  type="text"
-                  name="lot_number"
-                  inputmode="numeric"
-                  placeholder="Example: 2056"
-                >
-              </div>
-              <button type="submit" class="secondary" style="background: #2563eb; color: white;">
-                Upload FTP Photos
-              </button>
-            </div>
-          </form>
-      </div>
-
-        <div class="danger-card" style="border-color: #10b981; background: #f0fdf4;">
-          <p class="danger-title" style="color: #047857;">Upload All Missing FTP Photos</p>
-          <p class="danger-copy" style="color: #065f46;">
-            Scans your local uploads folder and sends any photos that haven't been uploaded to the FTP server yet.
-          </p>
-          <form action="{{ url_for('ftp_preview') }}" method="get">
-            <button type="submit" class="secondary" style="background: #059669; color: white; width: 100%;">
-              Preview Missing Lots
-            </button>
-          </form>
-        </div>
-
-        <div class="danger-card">
-          <p class="danger-title">Delete FTP Photos By Lot Number</p>
-          <p class="danger-copy">
-            Use this if a saved lot should no longer be included in the auction. This removes the remote FTP photos tied to that lot number from AuctionNinja.
-          </p>
-
-          <form action="{{ url_for('delete_remote_upload') }}" method="post">
-            <div class="danger-row">
-              <div class="field" style="margin-bottom:0;">
-                <label for="lot_number">Lot Number</label>
-                <input
-                  id="lot_number"
-                  type="text"
-                  name="lot_number"
-                  inputmode="numeric"
-                  placeholder="Example: 2056"
-                >
-              </div>
-              <button
-                type="submit"
-                class="danger-button"
-                onclick="return confirm('Delete the FTP photos tied to this lot number from AuctionNinja?');"
-              >
-                Delete FTP Photos
-              </button>
-            </div>
-          </form>
-        </div>
       </div>
     </div>
   </div>

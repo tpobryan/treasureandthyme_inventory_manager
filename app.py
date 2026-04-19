@@ -1084,14 +1084,16 @@ def fetch_last_lot_from_store() -> int:
         cursor.execute(f"SELECT last_lot_override FROM auctions WHERE id = {placeholder}", (current_auction_id,))
         row_override = cursor.fetchone()
         override_lot = 0
-        if row_override and row_override[0] is not None:
-            override_lot = int(row_override[0])
+        override_val = _extract_row_value(row_override, "last_lot_override", 0)
+        if override_val is not None:
+            override_lot = int(override_val)
 
         cursor.execute(f"SELECT MAX(lot_number) AS max_lot FROM auction_items WHERE auction_id = {placeholder}", (current_auction_id,))
         row_max = cursor.fetchone()
         max_lot = 0
-        if row_max and row_max[0] is not None:
-            max_lot = int(row_max[0])
+        max_val = _extract_row_value(row_max, "max_lot", 0)
+        if max_val is not None:
+            max_lot = int(max_val)
     finally:
         connection.close()
 
@@ -2666,6 +2668,11 @@ def export_history():
     )
 
 
+@app.route("/admin", methods=["GET"])
+def admin():
+    return render_template("admin.html")
+
+
 @app.route("/exports/<path:filename>/details", methods=["GET"])
 def export_batch_details(filename: str):
     safe_name = Path(filename).name
@@ -3314,19 +3321,19 @@ def delete_remote_upload():
 
     if not lot_number.isdigit():
         flash("Enter a valid lot number to delete FTP photos.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     record = get_ftp_upload_record(lot_number)
     if not record:
         flash(f"No saved FTP upload record was found for lot {lot_number}.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     auction_number = str(record.get("auction_number", "")).strip()
     remote_names = record.get("remote_names", [])
 
     if not auction_number or not isinstance(remote_names, list):
         flash(f"FTP upload record for lot {lot_number} is incomplete.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     try:
         deleted_names, missing_names = delete_lot_photos_from_auctionninja(
@@ -3337,7 +3344,7 @@ def delete_remote_upload():
     except Exception as exc:
         app.logger.exception("FTP delete failed for lot %s", lot_number)
         flash(f"FTP delete failed for lot {lot_number}: {exc}")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     if deleted_names and missing_names:
         flash(
@@ -3354,7 +3361,7 @@ def delete_remote_upload():
     else:
         flash(f"No FTP photos were recorded for lot {lot_number}.")
 
-    return redirect(url_for("index"))
+    return redirect(url_for("admin"))
 
 
 @app.route("/upload_remote_ftp", methods=["POST"])
@@ -3362,7 +3369,7 @@ def upload_remote_ftp():
     lot_number_str = request.form.get("lot_number", "").strip()
     if not lot_number_str.isdigit():
         flash("Enter a valid lot number to upload FTP photos.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     lot_number = int(lot_number_str)
     image_folder = None
@@ -3375,21 +3382,21 @@ def upload_remote_ftp():
 
     if not image_folder:
         flash(f"No image folder found for lot {lot_number}.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     final_dir = UPLOADS_DIR / image_folder
     if not final_dir.exists():
         flash(f"Image folder {final_dir.name} does not exist.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
     if not local_jpgs:
         flash(f"No JPG photos found in {final_dir.name}.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     if not auction_number:
         flash("No auction number configured or associated with this lot.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     try:
         auction_photo_index = reserve_next_auction_photo_index(auction_number)
@@ -3407,7 +3414,7 @@ def upload_remote_ftp():
         app.logger.exception("FTP upload failed for lot %s", lot_number)
         flash(f"FTP upload failed for lot {lot_number}: {exc}")
 
-    return redirect(url_for("index"))
+    return redirect(url_for("admin"))
 
 
 @app.route("/ftp_preview", methods=["GET"])
@@ -3415,7 +3422,7 @@ def ftp_preview():
     auction_number = current_auction_number_for_upload()
     if not auction_number:
         flash("You must set an active AUCTION_NUMBER to preview photos.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     missing_lots = []
 
@@ -3470,7 +3477,7 @@ def upload_selected_ftp():
     auction_number = current_auction_number_for_upload()
     if not auction_number:
         flash("You must set an active AUCTION_NUMBER to upload photos.")
-        return redirect(url_for("index"))
+        return redirect(url_for("admin"))
 
     lots_to_upload = {}
     for key, value in request.form.items():
@@ -3528,7 +3535,7 @@ def upload_selected_ftp():
     else:
         flash("No new lot photos were uploaded.")
 
-    return redirect(url_for("index"))
+    return redirect(url_for("admin"))
 
 
 if __name__ == "__main__":

@@ -205,13 +205,13 @@
 
         <div class="button-row">
           <button type="submit">Upload Selected Photos</button>
-          <a class="button-link secondary" href="{{ url_for('index') }}">Cancel</a>
+          <a class="button-link secondary" href="{{ url_for('admin') }}">Cancel</a>
         </div>
       </form>
       {% else %}
         <p>No missing lots found to upload.</p>
         <div class="button-row">
-          <a class="button-link secondary" href="{{ url_for('index') }}">Back to Dashboard</a>
+          <a class="button-link secondary" href="{{ url_for('admin') }}">Back to Admin</a>
         </div>
       {% endif %}
     </div>
