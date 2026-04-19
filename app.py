@@ -30,24 +30,12 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
-from PIL import Image, ImageOps
-from ftplib import FTP, FTP_TLS, error_perm
 from auctionninja_generator import AuctionNinjaGenerator
-
-try:
-    from pi_heif import register_heif_opener
-    HEIF_BACKEND = "pi-heif"
-except ImportError:
-    try:
-        from pillow_heif import register_heif_opener
-        HEIF_BACKEND = "pillow-heif"
-    except ImportError:
-        register_heif_opener = None
-        HEIF_BACKEND = ""
-
-HEIF_SUPPORT_ENABLED = register_heif_opener is not None
-if HEIF_SUPPORT_ENABLED:
-    register_heif_opener()
+from ftp_client import (
+    delete_lot_photos_from_auctionninja,
+    upload_lot_photos_to_auctionninja,
+)
+from image_processor import ALLOWED_EXTENSIONS, HEIF_SUPPORT_ENABLED, optimize_image
 
 load_dotenv()
 
@@ -67,10 +55,6 @@ logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
 generator = AuctionNinjaGenerator()
-
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-if HEIF_SUPPORT_ENABLED:
-    ALLOWED_EXTENSIONS.update({".heic", ".heif"})
 
 CSV_HEADER = [
     "Lot Number",
@@ -134,9 +118,6 @@ DEFAULT_CATEGORIES = [
     "Tools",
     "Other",
 ]
-MAX_IMAGE_DIMENSION = 1800
-JPEG_QUALITY = 85
-
 
 def render_edit_page(
     temp_id: str,
@@ -1894,37 +1875,6 @@ def make_unique_dir(base_dir: Path, name: str) -> Path:
         counter += 1
     return target
 
-def optimize_image(source_path: Path, destination_path: Path) -> Path:
-    """
-    Open an uploaded image, auto-rotate it, convert to RGB if needed,
-    resize to a sane max dimension, and save as optimized JPEG.
-    Returns the final saved path.
-    """
-    with Image.open(source_path) as img:
-        img = ImageOps.exif_transpose(img)
-
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
-        elif img.mode == "L":
-            img = img.convert("RGB")
-
-        width, height = img.size
-        longest_side = max(width, height)
-
-        if longest_side > MAX_IMAGE_DIMENSION:
-            scale = MAX_IMAGE_DIMENSION / float(longest_side)
-            new_size = (int(width * scale), int(height * scale))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
-
-        final_path = destination_path.with_suffix(".jpg")
-        img.save(
-            final_path,
-            format="JPEG",
-            quality=JPEG_QUALITY,
-            optimize=True,
-        )
-
-    return final_path
 
 def save_uploaded_files(uploaded_files) -> tuple[str, list[Path]]:
     temp_id = uuid.uuid4().hex
@@ -2204,117 +2154,6 @@ def delete_ftp_upload_record(lot_number: int | str) -> None:
     finally:
         connection.close()
 
-
-def connect_ftp():
-    host = os.getenv("FTP_HOST", "").strip()
-    username = os.getenv("FTP_USERNAME", "").strip()
-    password = os.getenv("FTP_PASSWORD", "").strip()
-    port = int(os.getenv("FTP_PORT", "21"))
-    use_tls = os.getenv("FTP_TLS", "false").lower() == "true"
-
-    if not host or not username or not password:
-        raise ValueError("FTP credentials are missing in .env")
-
-    if use_tls:
-        ftp = FTP_TLS()
-        ftp.connect(host, port, timeout=30)
-        ftp.login(username, password)
-        ftp.prot_p()
-    else:
-        ftp = FTP()
-        ftp.connect(host, port, timeout=30)
-        ftp.login(username, password)
-
-    return ftp
-
-
-def ensure_remote_dir(ftp, remote_dir: str) -> None:
-    try:
-        ftp.cwd(remote_dir)
-        return
-    except error_perm:
-        pass
-
-    ftp.mkd(remote_dir)
-    ftp.cwd(remote_dir)
-
-
-def upload_lot_photos_to_auctionninja(
-    local_files: list[Any],
-    auction_number: str,
-    lot_number: int,
-) -> list[str]:
-    """
-    Upload files to AuctionNinja naming format:
-    folder: auction_number
-    files: {lot_number}_1.jpg, {lot_number}_2.jpg, ...
-    or custom names if a list of tuples is provided.
-    """
-    if not local_files:
-        return []
-
-    uploaded_names: list[str] = []
-    ftp = connect_ftp()
-
-    try:
-        ensure_remote_dir(ftp, str(auction_number))
-
-        if isinstance(local_files[0], tuple):
-            files_to_upload = local_files
-        else:
-            files_to_upload = [(f, f"{lot_number}_{i}.jpg") for i, f in enumerate(sorted(local_files), start=1)]
-
-        for local_file, remote_name in files_to_upload:
-            with local_file.open("rb") as f:
-                ftp.storbinary(f"STOR {remote_name}", f)
-            uploaded_names.append(remote_name)
-            app.logger.info("Uploaded %s as %s/%s", local_file, auction_number, remote_name)
-
-    finally:
-        try:
-            ftp.quit()
-        except Exception:
-            pass
-
-    return uploaded_names
-
-
-def delete_lot_photos_from_auctionninja(
-    auction_number: str,
-    remote_names: list[str],
-) -> tuple[list[str], list[str]]:
-    if not remote_names:
-        return [], []
-
-    deleted_names: list[str] = []
-    missing_names: list[str] = []
-    ftp = connect_ftp()
-
-    try:
-        ftp.cwd(str(auction_number))
-
-        for remote_name in remote_names:
-            try:
-                ftp.delete(remote_name)
-                deleted_names.append(remote_name)
-                app.logger.info("Deleted remote file %s/%s", auction_number, remote_name)
-            except error_perm as exc:
-                if str(exc).startswith("550"):
-                    missing_names.append(remote_name)
-                    app.logger.warning(
-                        "Remote file missing during delete: %s/%s",
-                        auction_number,
-                        remote_name,
-                    )
-                else:
-                    raise
-    finally:
-        try:
-            ftp.quit()
-        except Exception:
-            pass
-
-    return deleted_names, missing_names
 
 def load_saved_files_for_temp_id(temp_id: str) -> list[Path]:
     temp_dir = UPLOADS_DIR / temp_id
