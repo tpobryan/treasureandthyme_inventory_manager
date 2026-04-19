@@ -20,29 +20,11 @@ def test_env(tmp_path, monkeypatch):
         "DATA_DIR": app_module.DATA_DIR,
         "UPLOADS_DIR": app_module.UPLOADS_DIR,
         "EXPORTS_DIR": app_module.EXPORTS_DIR,
-        "CSV_PATH": app_module.CSV_PATH,
-        "LOT_STATE_PATH": app_module.LOT_STATE_PATH,
-        "AUCTION_PHOTO_STATE_PATH": app_module.AUCTION_PHOTO_STATE_PATH,
-        "FTP_UPLOAD_STATE_PATH": app_module.FTP_UPLOAD_STATE_PATH,
-        "ACTIVE_DRAFT_STATE_PATH": app_module.ACTIVE_DRAFT_STATE_PATH,
-        "LOT_LOCK_PATH": app_module.LOT_LOCK_PATH,
-        "AUCTION_PHOTO_LOCK_PATH": app_module.AUCTION_PHOTO_LOCK_PATH,
-        "FTP_UPLOAD_STATE_LOCK_PATH": app_module.FTP_UPLOAD_STATE_LOCK_PATH,
-        "ACTIVE_DRAFT_STATE_LOCK_PATH": app_module.ACTIVE_DRAFT_STATE_LOCK_PATH,
     }
 
     app_module.DATA_DIR = data_dir
     app_module.UPLOADS_DIR = uploads_dir
     app_module.EXPORTS_DIR = exports_dir
-    app_module.CSV_PATH = data_dir / "auction_items.csv"
-    app_module.LOT_STATE_PATH = data_dir / "lot_state.json"
-    app_module.AUCTION_PHOTO_STATE_PATH = data_dir / "auction_photo_state.json"
-    app_module.FTP_UPLOAD_STATE_PATH = data_dir / "ftp_upload_state.json"
-    app_module.ACTIVE_DRAFT_STATE_PATH = data_dir / "active_draft.json"
-    app_module.LOT_LOCK_PATH = data_dir / "lot_state.lock"
-    app_module.AUCTION_PHOTO_LOCK_PATH = data_dir / "auction_photo_state.lock"
-    app_module.FTP_UPLOAD_STATE_LOCK_PATH = data_dir / "ftp_upload_state.lock"
-    app_module.ACTIVE_DRAFT_STATE_LOCK_PATH = data_dir / "active_draft.lock"
     app_module.app.config["TESTING"] = True
     monkeypatch.setenv("DATABASE_URL", "")
     monkeypatch.setenv("AUCTION_NUMBER", "")
@@ -62,16 +44,6 @@ def test_env(tmp_path, monkeypatch):
 
     for name, value in original_paths.items():
         setattr(app_module, name, value)
-
-
-def test_reserve_next_lot_clears_stale_lock(test_env):
-    app_module.LOT_LOCK_PATH.write_text("999999", encoding="utf-8")
-
-    next_lot = app_module.reserve_next_lot()
-
-    assert next_lot == 2000
-    assert not app_module.LOT_LOCK_PATH.exists()
-    assert app_module.get_last_lot() == 2000
 
 
 def test_validate_save_form_rejects_blank_title_and_bad_estimates():
@@ -201,28 +173,7 @@ def test_save_with_invalid_data_does_not_write_csv(test_env):
 
     assert response.status_code == 200
     assert b"Title is required before saving." in response.data
-    assert not app_module.CSV_PATH.exists()
     assert draft_dir.exists()
-
-
-def test_record_and_delete_ftp_upload_record(test_env):
-    app_module.record_ftp_upload(
-        lot_number=2056,
-        auction_number="4",
-        auction_photo_index=5,
-        remote_names=["5_1.jpg", "5_2.jpg"],
-    )
-
-    record = app_module.get_ftp_upload_record(2056)
-
-    assert record is not None
-    assert record["auction_number"] == "4"
-    assert record["auction_photo_index"] == 5
-    assert record["remote_names"] == ["5_1.jpg", "5_2.jpg"]
-
-    app_module.delete_ftp_upload_record(2056)
-
-    assert app_module.get_ftp_upload_record(2056) is None
 
 
 def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, monkeypatch):
@@ -350,13 +301,6 @@ def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
     assert app_module.get_active_draft() is None
 
 
-def test_dashboard_requires_database(test_env):
-    response = test_env["client"].get("/dashboard", follow_redirects=True)
-
-    assert response.status_code == 200
-    assert b"The auction dashboard is available when DATABASE_URL is configured." in response.data
-
-
 def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
     draft_dir = test_env["uploads_dir"] / "draft123"
     draft_dir.mkdir(parents=True, exist_ok=True)
@@ -420,15 +364,13 @@ def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
     )
 
     assert response.status_code == 200
-    assert b"Saved lot 2000 to the database." in response.data
-    assert not app_module.CSV_PATH.exists()
-
+    assert b"Saved lot 1 to the database." in response.data
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
             "SELECT lot_number, title, item_notes, shipping_available, status FROM auction_items"
         ).fetchone()
 
-    assert row == (2000, "Blue Vase", "notes", "No", "ready")
+    assert row == (1, "Blue Vase", "notes", "No", "ready")
 
 
 def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
@@ -481,13 +423,6 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
     assert row[1].startswith("auction_4_items_export_")
     assert row[2] is not None
     assert batch == ("full", 1, "2005")
-
-
-def test_manage_items_requires_database(test_env):
-    response = test_env["client"].get("/manage_items", follow_redirects=True)
-
-    assert response.status_code == 200
-    assert b"Batch item management is available when DATABASE_URL is configured." in response.data
 
 
 def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):

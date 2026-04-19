@@ -1002,6 +1002,7 @@ def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
     if str(existing_item.get("auction_id", "")).isdigit() and int(existing_item["auction_id"]) == target_auction_id:
         return True
 
+    current_auction_id = get_current_auction_id()
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -2411,6 +2412,7 @@ def list_export_archives() -> list[dict[str, str]]:
 
 
 def fetch_export_batch(filename: str) -> dict[str, str] | None:
+    current_auction_id = get_current_auction_id()
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -2445,6 +2447,7 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
     if not lot_numbers:
         return []
 
+    current_auction_id = get_current_auction_id()
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
