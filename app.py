@@ -930,6 +930,7 @@ def get_current_auction() -> dict[str, str] | None:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -1223,17 +1224,17 @@ def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
                     last_export_batch = '',
                     published_at = NULL,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE lot_number = ?
+                WHERE lot_number = ? AND auction_id = ?
                 """,
-                (target_auction_id, ITEM_STATUS_READY, lot_number),
+                (target_auction_id, ITEM_STATUS_READY, lot_number, current_auction_id),
             )
             cursor.execute(
                 """
                 UPDATE ftp_uploads
                 SET auction_id = ?
-                WHERE lot_number = ?
+                WHERE lot_number = ? AND auction_id = ?
                 """,
-                (target_auction_id, lot_number),
+                (target_auction_id, lot_number, current_auction_id),
             )
         else:
             cursor.execute(
@@ -1244,17 +1245,17 @@ def move_item_to_auction(lot_number: int, target_auction_id: int) -> bool:
                     status = %s,
                     last_export_batch = '',
                     published_at = NULL
-                WHERE lot_number = %s
+                WHERE lot_number = %s AND auction_id = %s
                 """,
-                (target_auction_id, ITEM_STATUS_READY, lot_number),
+                (target_auction_id, ITEM_STATUS_READY, lot_number, current_auction_id),
             )
             cursor.execute(
                 """
                 UPDATE ftp_uploads
                 SET auction_id = %s
-                WHERE lot_number = %s
+                WHERE lot_number = %s AND auction_id = %s
                 """,
-                (target_auction_id, lot_number),
+                (target_auction_id, lot_number, current_auction_id),
             )
         connection.commit()
         return True
@@ -2968,6 +2969,7 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -2976,10 +2978,11 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
             f"""
             SELECT auction_id, lot_number, title, status, category, last_export_batch, updated_at, published_at
             FROM auction_items
-            WHERE lot_number IN ({placeholders})
+            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
+              AND lot_number IN ({placeholders})
             ORDER BY lot_number
             """,
-            tuple(lot_numbers),
+            (current_auction_id, *tuple(lot_numbers)),
         )
         records = cursor.fetchall()
     finally:
@@ -3748,9 +3751,6 @@ def save():
 
     csv_lot_number = reserve_next_lot()
 
-    if csv_lot_number > 500:
-        flash(f"Warning: AuctionNinja limits auctions to a maximum of 500 lots. You are saving Lot #{csv_lot_number}.")
-
     safe_title = slugify_title(title)
     folder_name = f"{csv_lot_number}_{safe_title}"
     final_dir = make_unique_dir(UPLOADS_DIR, folder_name)
@@ -3990,81 +3990,6 @@ def upload_remote_ftp():
     except Exception as exc:
         app.logger.exception("FTP upload failed for lot %s", lot_number)
         flash(f"FTP upload failed for lot {lot_number}: {exc}")
-
-    return redirect(url_for("index"))
-
-
-@app.route("/upload_remote_ftp_range", methods=["POST"])
-def upload_remote_ftp_range():
-    start_lot_str = request.form.get("start_lot", "").strip()
-    end_lot_str = request.form.get("end_lot", "").strip()
-
-    if not start_lot_str.isdigit() or not end_lot_str.isdigit():
-        flash("Enter valid start and end lot numbers.")
-        return redirect(url_for("index"))
-
-    start_lot = int(start_lot_str)
-    end_lot = int(end_lot_str)
-
-    if start_lot > end_lot:
-        flash("Start lot must be less than or equal to end lot.")
-        return redirect(url_for("index"))
-
-    uploaded_count = 0
-    failed_lots = []
-    
-    for lot_number in range(start_lot, end_lot + 1):
-        image_folder = None
-        auction_number = current_auction_number_for_upload()
-
-        if database_enabled():
-            item = fetch_saved_item(lot_number)
-            if item:
-                image_folder = item.get("image_folder")
-                auction_number = str(item.get("auction_id", auction_number))
-        else:
-            if UPLOADS_DIR.exists():
-                for d in UPLOADS_DIR.iterdir():
-                    if d.is_dir() and d.name.startswith(f"{lot_number}_"):
-                        image_folder = d.name
-                        break
-
-        if not image_folder:
-            continue
-
-        final_dir = UPLOADS_DIR / image_folder
-        if not final_dir.exists():
-            continue
-
-        local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
-        if not local_jpgs:
-            continue
-
-        if not auction_number:
-            continue
-
-        try:
-            auction_photo_index = reserve_next_auction_photo_index(auction_number)
-            uploaded_names = upload_lot_photos_to_auctionninja(
-                local_files=local_jpgs,
-                auction_number=auction_number,
-                lot_number=lot_number,
-            )
-            if uploaded_names:
-                record_ftp_upload(lot_number, auction_number, auction_photo_index, uploaded_names)
-                uploaded_count += 1
-            else:
-                failed_lots.append(str(lot_number))
-        except Exception as exc:
-            app.logger.exception("FTP upload failed for lot %s", lot_number)
-            failed_lots.append(str(lot_number))
-
-    if uploaded_count > 0:
-        flash(f"Successfully uploaded {uploaded_count} lot(s) to FTP.")
-    if failed_lots:
-        flash(f"Failed to upload photos for lot(s): {', '.join(failed_lots)}.")
-    if uploaded_count == 0 and not failed_lots:
-        flash("No matching lots with photos found in that range.")
 
     return redirect(url_for("index"))
 

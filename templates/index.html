@@ -258,13 +258,6 @@
       align-items: end;
     }
 
-    .danger-row-range {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: end;
-    }
-
     .danger-button {
       background: var(--danger-button);
     }
@@ -445,8 +438,7 @@
         width: 100%;
       }
 
-        .danger-row,
-        .danger-row-range {
+        .danger-row {
         grid-template-columns: 1fr;
       }
     }
@@ -625,28 +617,6 @@
               </button>
             </div>
           </form>
-        </div>
-
-      <div class="danger-card" style="border-color: #a78bfa; background: #f5f3ff;">
-        <p class="danger-title" style="color: #4338ca;">Upload FTP Photos By Range</p>
-        <p class="danger-copy" style="color: #312e81;">
-          Force re-upload photos for a range of lots to the AuctionNinja FTP server.
-        </p>
-        <form action="{{ url_for('upload_remote_ftp_range') }}" method="post">
-          <div class="danger-row-range">
-            <div class="field" style="margin-bottom:0;">
-              <label for="start_lot" style="color: #312e81;">Start Lot</label>
-              <input id="start_lot" type="text" name="start_lot" inputmode="numeric" placeholder="e.g. 2000" required>
-            </div>
-            <div class="field" style="margin-bottom:0;">
-              <label for="end_lot" style="color: #312e81;">End Lot</label>
-              <input id="end_lot" type="text" name="end_lot" inputmode="numeric" placeholder="e.g. 2050" required>
-            </div>
-            <button type="submit" class="secondary" style="background: #4f46e5; color: white;">
-              Upload Range
-            </button>
-          </div>
-        </form>
       </div>
 
         <div class="danger-card" style="border-color: #10b981; background: #f0fdf4;">
