@@ -2191,6 +2191,7 @@ def delete_ftp_upload_record(lot_number: int | str) -> None:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
+    current_auction_id = get_current_auction_id()
 
     try:
         cursor = connection.cursor()
@@ -3340,6 +3341,7 @@ def save():
 
     auction_number = current_auction_number_for_upload()
     uploaded_names = []
+    auction_photo_index = 0
 
     if auction_number:
         try:
@@ -3348,7 +3350,7 @@ def save():
             uploaded_names = upload_lot_photos_to_auctionninja(
                 local_files=local_jpgs,
                 auction_number=auction_number,
-                    lot_number=csv_lot_number,
+                lot_number=csv_lot_number,
             )
         except Exception as exc:
             app.logger.exception("FTP upload failed")
@@ -3389,27 +3391,27 @@ def set_next_lot():
     next_lot = int(next_lot_str)
     last_lot = next_lot - 1
 
-        current_auction_id = get_current_auction_id()
-        ensure_item_store_ready()
-        connection, dialect = connect_item_store()
-        assert connection is not None
-        
+    current_auction_id = get_current_auction_id()
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+    
     try:
-            cursor = connection.cursor()
-            placeholder = "?" if dialect == "sqlite" else "%s"
-            if dialect == "sqlite":
-                cursor.execute(
-                    f"UPDATE auctions SET last_lot_override = {placeholder}, updated_at = CURRENT_TIMESTAMP WHERE id = {placeholder}",
-                    (last_lot, current_auction_id)
-                )
-            else:
-                cursor.execute(
-                    f"UPDATE auctions SET last_lot_override = {placeholder} WHERE id = {placeholder}",
-                    (last_lot, current_auction_id)
-                )
-            connection.commit()
-        finally:
-            connection.close()
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        if dialect == "sqlite":
+            cursor.execute(
+                f"UPDATE auctions SET last_lot_override = {placeholder}, updated_at = CURRENT_TIMESTAMP WHERE id = {placeholder}",
+                (last_lot, current_auction_id)
+            )
+        else:
+            cursor.execute(
+                f"UPDATE auctions SET last_lot_override = {placeholder} WHERE id = {placeholder}",
+                (last_lot, current_auction_id)
+            )
+        connection.commit()
+    finally:
+        connection.close()
 
     flash(f"Next lot number successfully set to {next_lot}.")
     return redirect(request.referrer or url_for("index"))
@@ -3688,4 +3690,3 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     debug = os.getenv("FLASK_DEBUG", "true").lower() == "true"
     app.run(host=host, port=port, debug=debug)
-
