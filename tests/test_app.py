@@ -20,11 +20,13 @@ def test_env(tmp_path, monkeypatch):
         "DATA_DIR": app_module.DATA_DIR,
         "UPLOADS_DIR": app_module.UPLOADS_DIR,
         "EXPORTS_DIR": app_module.EXPORTS_DIR,
+        "_DB_INITIALIZED": app_module._DB_INITIALIZED,
     }
 
     app_module.DATA_DIR = data_dir
     app_module.UPLOADS_DIR = uploads_dir
     app_module.EXPORTS_DIR = exports_dir
+    app_module._DB_INITIALIZED = False
     app_module.app.config["TESTING"] = True
     monkeypatch.setenv("DATABASE_URL", "")
     monkeypatch.setenv("AUCTION_NUMBER", "")
