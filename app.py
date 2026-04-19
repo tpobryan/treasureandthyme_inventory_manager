@@ -3994,6 +3994,81 @@ def upload_remote_ftp():
     return redirect(url_for("index"))
 
 
+@app.route("/upload_remote_ftp_range", methods=["POST"])
+def upload_remote_ftp_range():
+    start_lot_str = request.form.get("start_lot", "").strip()
+    end_lot_str = request.form.get("end_lot", "").strip()
+
+    if not start_lot_str.isdigit() or not end_lot_str.isdigit():
+        flash("Enter valid start and end lot numbers.")
+        return redirect(url_for("index"))
+
+    start_lot = int(start_lot_str)
+    end_lot = int(end_lot_str)
+
+    if start_lot > end_lot:
+        flash("Start lot must be less than or equal to end lot.")
+        return redirect(url_for("index"))
+
+    uploaded_count = 0
+    failed_lots = []
+    
+    for lot_number in range(start_lot, end_lot + 1):
+        image_folder = None
+        auction_number = current_auction_number_for_upload()
+
+        if database_enabled():
+            item = fetch_saved_item(lot_number)
+            if item:
+                image_folder = item.get("image_folder")
+                auction_number = str(item.get("auction_id", auction_number))
+        else:
+            if UPLOADS_DIR.exists():
+                for d in UPLOADS_DIR.iterdir():
+                    if d.is_dir() and d.name.startswith(f"{lot_number}_"):
+                        image_folder = d.name
+                        break
+
+        if not image_folder:
+            continue
+
+        final_dir = UPLOADS_DIR / image_folder
+        if not final_dir.exists():
+            continue
+
+        local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
+        if not local_jpgs:
+            continue
+
+        if not auction_number:
+            continue
+
+        try:
+            auction_photo_index = reserve_next_auction_photo_index(auction_number)
+            uploaded_names = upload_lot_photos_to_auctionninja(
+                local_files=local_jpgs,
+                auction_number=auction_number,
+                lot_number=lot_number,
+            )
+            if uploaded_names:
+                record_ftp_upload(lot_number, auction_number, auction_photo_index, uploaded_names)
+                uploaded_count += 1
+            else:
+                failed_lots.append(str(lot_number))
+        except Exception as exc:
+            app.logger.exception("FTP upload failed for lot %s", lot_number)
+            failed_lots.append(str(lot_number))
+
+    if uploaded_count > 0:
+        flash(f"Successfully uploaded {uploaded_count} lot(s) to FTP.")
+    if failed_lots:
+        flash(f"Failed to upload photos for lot(s): {', '.join(failed_lots)}.")
+    if uploaded_count == 0 and not failed_lots:
+        flash("No matching lots with photos found in that range.")
+
+    return redirect(url_for("index"))
+
+
 @app.route("/ftp_preview", methods=["GET"])
 def ftp_preview():
     auction_number = current_auction_number_for_upload()
