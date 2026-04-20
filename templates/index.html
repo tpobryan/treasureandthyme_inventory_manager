@@ -578,7 +578,7 @@
           <a class="button-link secondary" href="{{ url_for('export_csv') }}">Download Auction {{ current_auction.id if current_auction else '' }} CSV</a>
           <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
           <a class="button-link secondary" href="{{ url_for('dashboard') }}">Auction Dashboard</a>
-          <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Export Batches</a>
+          <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Manage Export Batches</a>
           <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
           <a class="button-link secondary" href="{{ url_for('admin') }}">Admin</a>
           {% if auth_enabled and is_authenticated %}

@@ -244,7 +244,7 @@
       <div class="button-row">
         <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
         <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
-        <a class="button-link secondary" href="{{ url_for('manage_items') }}">Manage Items</a>
+        <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Manage Items</a>
         <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
         {% if auth_enabled and is_authenticated %}
           <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
@@ -290,23 +290,23 @@
       {% endif %}
 
       <div class="summary-grid">
-        <a class="card summary-card" href="{{ url_for('manage_items', status='ready') }}" style="text-decoration:none; color:inherit;">
+        <a class="card summary-card" href="{{ url_for('items.manage_items', status='ready') }}" style="text-decoration:none; color:inherit;">
           <h2>{{ counts['ready'] }}</h2>
           <p>Ready To Export</p>
         </a>
-        <a class="card summary-card" href="{{ url_for('manage_items', status='needs_update') }}" style="text-decoration:none; color:inherit;">
+        <a class="card summary-card" href="{{ url_for('items.manage_items', status='needs_update') }}" style="text-decoration:none; color:inherit;">
           <h2>{{ counts['needs_update'] }}</h2>
           <p>Need Re-Export</p>
         </a>
-        <a class="card summary-card" href="{{ url_for('manage_items', status='published') }}" style="text-decoration:none; color:inherit;">
+        <a class="card summary-card" href="{{ url_for('items.manage_items', status='published') }}" style="text-decoration:none; color:inherit;">
           <h2>{{ counts['published'] }}</h2>
           <p>Published</p>
         </a>
-        <a class="card summary-card" href="{{ url_for('manage_items', status='removed') }}" style="text-decoration:none; color:inherit;">
+        <a class="card summary-card" href="{{ url_for('items.manage_items', status='removed') }}" style="text-decoration:none; color:inherit;">
           <h2>{{ counts['removed'] }}</h2>
           <p>Removed</p>
         </a>
-        <a class="card summary-card" href="{{ url_for('manage_items', status='all') }}" style="text-decoration:none; color:inherit;">
+        <a class="card summary-card" href="{{ url_for('items.manage_items', status='all') }}" style="text-decoration:none; color:inherit;">
           <h2>{{ counts['all'] }}</h2>
           <p>Total Lots</p>
         </a>

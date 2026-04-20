@@ -141,7 +141,7 @@
       {% endwith %}
 
       <div class="toolbar">
-        <a class="button-link secondary" href="{{ url_for('manage_items') }}">Back to Manage Items</a>
+        <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Back to Manage Items</a>
         <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
         <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
         {% if auth_enabled and is_authenticated %}

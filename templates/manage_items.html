@@ -297,7 +297,7 @@
           </div>
           <div class="auction-actions">
             <form action="{{ url_for('switch_auction_route') }}" method="post">
-              <input type="hidden" name="return_to" value="{{ url_for('manage_items', status=current_filter) }}">
+              <input type="hidden" name="return_to" value="{{ url_for('items.manage_items', status=current_filter) }}">
               <select name="auction_id" aria-label="Switch auction">
                 {% for auction in auction_list %}
                   <option value="{{ auction.id }}" {% if auction.is_current == '1' %}selected{% endif %}>Auction {{ auction.id }} · {{ auction.status }}</option>
@@ -306,7 +306,7 @@
               <button type="submit" class="secondary">Switch Auction</button>
             </form>
             <form action="{{ url_for('update_auction_status_route') }}" method="post">
-              <input type="hidden" name="return_to" value="{{ url_for('manage_items', status=current_filter) }}">
+              <input type="hidden" name="return_to" value="{{ url_for('items.manage_items', status=current_filter) }}">
               <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
               <select name="status" aria-label="Auction status">
                 {% for status in auction_statuses %}
@@ -316,7 +316,7 @@
               <button type="submit" class="secondary">Update Status</button>
             </form>
             <form action="{{ url_for('create_auction_route') }}" method="post">
-              <input type="hidden" name="return_to" value="{{ url_for('manage_items', status=current_filter) }}">
+              <input type="hidden" name="return_to" value="{{ url_for('items.manage_items', status=current_filter) }}">
               <button type="submit" class="secondary">Create Next Auction</button>
             </form>
           </div>
@@ -332,12 +332,12 @@
       {% endwith %}
 
       <div class="filter-row">
-        <a class="filter-pill {% if current_filter == 'active' %}active{% endif %}" href="{{ url_for('manage_items', status='active') }}">Active ({{ filter_counts['active'] }})</a>
-        <a class="filter-pill {% if current_filter == 'ready' %}active{% endif %}" href="{{ url_for('manage_items', status='ready') }}">Ready ({{ filter_counts['ready'] }})</a>
-        <a class="filter-pill {% if current_filter == 'published' %}active{% endif %}" href="{{ url_for('manage_items', status='published') }}">Published ({{ filter_counts['published'] }})</a>
-        <a class="filter-pill {% if current_filter == 'needs_update' %}active{% endif %}" href="{{ url_for('manage_items', status='needs_update') }}">Needs Update ({{ filter_counts['needs_update'] }})</a>
-        <a class="filter-pill {% if current_filter == 'removed' %}active{% endif %}" href="{{ url_for('manage_items', status='removed') }}">Removed ({{ filter_counts['removed'] }})</a>
-        <a class="filter-pill {% if current_filter == 'all' %}active{% endif %}" href="{{ url_for('manage_items', status='all') }}">All ({{ filter_counts['all'] }})</a>
+        <a class="filter-pill {% if current_filter == 'active' %}active{% endif %}" href="{{ url_for('items.manage_items', status='active') }}">Active ({{ filter_counts['active'] }})</a>
+        <a class="filter-pill {% if current_filter == 'ready' %}active{% endif %}" href="{{ url_for('items.manage_items', status='ready') }}">Ready ({{ filter_counts['ready'] }})</a>
+        <a class="filter-pill {% if current_filter == 'published' %}active{% endif %}" href="{{ url_for('items.manage_items', status='published') }}">Published ({{ filter_counts['published'] }})</a>
+        <a class="filter-pill {% if current_filter == 'needs_update' %}active{% endif %}" href="{{ url_for('items.manage_items', status='needs_update') }}">Needs Update ({{ filter_counts['needs_update'] }})</a>
+        <a class="filter-pill {% if current_filter == 'removed' %}active{% endif %}" href="{{ url_for('items.manage_items', status='removed') }}">Removed ({{ filter_counts['removed'] }})</a>
+        <a class="filter-pill {% if current_filter == 'all' %}active{% endif %}" href="{{ url_for('items.manage_items', status='all') }}">All ({{ filter_counts['all'] }})</a>
       </div>
 
       <form action="{{ url_for('export_selected_csv') }}" method="post">
@@ -398,12 +398,12 @@
                     <td>{{ item['last_export_batch'] or 'Not exported yet' }}</td>
                     <td>
                       <div class="inline-actions">
-                        <a class="button-link secondary" href="{{ url_for('edit_saved_item', lot_number=item['lot_number'], status=current_filter) }}">Edit</a>
+                        <a class="button-link secondary" href="{{ url_for('items.edit_saved_item', lot_number=item['lot_number'], status=current_filter) }}">Edit</a>
                         {% if item['status'] != 'removed' %}
                           <button
                             type="submit"
                             class="danger-button"
-                            formaction="{{ url_for('remove_saved_item', lot_number=item['lot_number']) }}"
+                            formaction="{{ url_for('items.remove_saved_item', lot_number=item['lot_number']) }}"
                             formmethod="post"
                             onclick="return confirm('Remove lot {{ item['lot_number'] }} from future exports? This keeps the record but hides it from normal export lists.');"
                           >
@@ -413,7 +413,7 @@
                           <button
                             type="submit"
                             class="secondary"
-                            formaction="{{ url_for('restore_saved_item', lot_number=item['lot_number']) }}"
+                            formaction="{{ url_for('items.restore_saved_item', lot_number=item['lot_number']) }}"
                             formmethod="post"
                           >
                             Restore
@@ -455,7 +455,7 @@
                 <option value="{{ auction.id }}">Auction {{ auction.id }} · {{ auction.status }}</option>
               {% endfor %}
             </select>
-            <button type="submit" formaction="{{ url_for('bulk_update_items') }}" formmethod="post">Apply</button>
+            <button type="submit" formaction="{{ url_for('items.bulk_update_items') }}" formmethod="post">Apply</button>
             <button type="submit">Download Selected CSV</button>
           </div>
         </div>

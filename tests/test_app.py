@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 import app as app_module
+import database as db_module
+import utils as utils_module
 
 
 @pytest.fixture
@@ -17,16 +19,19 @@ def test_env(tmp_path, monkeypatch):
     exports_dir.mkdir(parents=True, exist_ok=True)
 
     original_paths = {
-        "DATA_DIR": app_module.DATA_DIR,
-        "UPLOADS_DIR": app_module.UPLOADS_DIR,
-        "EXPORTS_DIR": app_module.EXPORTS_DIR,
-        "_DB_INITIALIZED": app_module._DB_INITIALIZED,
+        "DATA_DIR": db_module.DATA_DIR,
+        "UPLOADS_DIR": utils_module.UPLOADS_DIR,
+        "EXPORTS_DIR": db_module.EXPORTS_DIR,
+        "_DB_INITIALIZED": db_module._DB_INITIALIZED,
     }
 
-    app_module.DATA_DIR = data_dir
+    db_module.DATA_DIR = data_dir
+    utils_module.UPLOADS_DIR = uploads_dir
     app_module.UPLOADS_DIR = uploads_dir
+    db_module.EXPORTS_DIR = exports_dir
+    utils_module.EXPORTS_DIR = exports_dir
     app_module.EXPORTS_DIR = exports_dir
-    app_module._DB_INITIALIZED = False
+    db_module._DB_INITIALIZED = False
     app_module.app.config["TESTING"] = True
     monkeypatch.setenv("DATABASE_URL", "")
     monkeypatch.setenv("AUCTION_NUMBER", "")
@@ -45,7 +50,15 @@ def test_env(tmp_path, monkeypatch):
     }
 
     for name, value in original_paths.items():
-        setattr(app_module, name, value)
+        if name == "UPLOADS_DIR":
+            setattr(utils_module, name, value)
+            setattr(app_module, name, value)
+        elif name == "EXPORTS_DIR":
+            setattr(db_module, name, value)
+            setattr(utils_module, name, value)
+            setattr(app_module, name, value)
+        else:
+            setattr(db_module, name, value)
 
 
 def test_validate_save_form_rejects_blank_title_and_bad_estimates():
@@ -819,7 +832,7 @@ def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeyp
     archived = test_env["exports_dir"] / "auction_4_batch_2000-2001_20260408.csv"
     archived.write_text("Lot Number,Lead\n2000,Lamp\n", encoding="utf-8")
     with sqlite3.connect(db_path) as connection:
-        app_module.ensure_item_store_ready()
+        db_module.ensure_item_store_ready()
         connection.execute(
             """
             INSERT INTO export_batches (auction_id, filename, export_type, lot_numbers, lot_count, archive_path)

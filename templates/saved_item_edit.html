@@ -243,7 +243,7 @@
     {% endwith %}
 
     <div class="topbar">
-      <a class="back-link" href="{{ url_for('manage_items', status=current_filter) }}">← Back to manage items</a>
+      <a class="back-link" href="{{ url_for('items.manage_items', status=current_filter) }}">← Back to manage items</a>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         {% if auth_enabled and is_authenticated %}
           <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
@@ -304,7 +304,7 @@
             <div class="meta-item">
               <div class="meta-label">Move To Another Auction</div>
               <div class="meta-value" style="margin-bottom:10px;">A lot can belong to only one auction. Moving it resets its publish state so it can be exported again in the new auction.</div>
-              <form class="move-form" action="{{ url_for('move_saved_item', lot_number=item['lot_number']) }}" method="post">
+              <form class="move-form" action="{{ url_for('items.move_saved_item', lot_number=item['lot_number']) }}" method="post">
                 <input type="hidden" name="current_filter" value="{{ current_filter }}">
                 <select name="auction_id" aria-label="Move to auction">
                   {% for auction in auction_list %}
@@ -321,7 +321,7 @@
       <div>
         <div class="card">
           <h2>Edit Listing Fields</h2>
-          <form action="{{ url_for('update_saved_item', lot_number=item['lot_number']) }}" method="post">
+          <form action="{{ url_for('items.update_saved_item', lot_number=item['lot_number']) }}" method="post">
             <input type="hidden" name="current_filter" value="{{ current_filter }}">
             <div class="field">
               <label for="Title">Title</label>
@@ -367,7 +367,7 @@
 
             <div class="button-row">
               <button type="submit">Save Changes</button>
-              <a class="button-link secondary" href="{{ url_for('manage_items', status=current_filter) }}">Cancel</a>
+              <a class="button-link secondary" href="{{ url_for('items.manage_items', status=current_filter) }}">Cancel</a>
             </div>
           </form>
         </div>
