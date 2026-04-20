@@ -425,7 +425,7 @@
     {% endwith %}
 
     <div class="topbar">
-      <a class="back-link" href="{{ url_for('index') }}">← Back to upload</a>
+      <a class="back-link" href="{{ url_for('main.index') }}">← Back to upload</a>
       <div class="lot-preview">Next lot number on save: {{ next_lot }}</div>
     </div>
 
@@ -439,7 +439,7 @@
             <p class="photo-tools-title">Adjust Draft Photos</p>
             <p class="photo-tools-copy">Add or remove photos here before using Revise with AI.</p>
 
-            <form action="{{ url_for('add_draft_photos') }}" method="post" enctype="multipart/form-data">
+            <form action="{{ url_for('main.add_draft_photos') }}" method="post" enctype="multipart/form-data">
               <input type="hidden" name="temp_id" value="{{ temp_id }}">
               <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -497,7 +497,7 @@
                 <img src="{{ image_url_prefix }}{{ image_file }}" alt="Uploaded image">
                 <div class="thumb-name">{{ image_file }}</div>
                 <div class="thumb-actions">
-                  <form action="{{ url_for('remove_draft_photo') }}" method="post">
+                  <form action="{{ url_for('main.remove_draft_photo') }}" method="post">
                     <input type="hidden" name="temp_id" value="{{ temp_id }}">
                     <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
                     <input type="hidden" name="filename" value="{{ image_file }}">
@@ -587,7 +587,7 @@
                 </div>
               </div>
 
-              <form action="{{ url_for('choose_option') }}" method="post" style="margin-top: 12px;">
+              <form action="{{ url_for('main.choose_option') }}" method="post" style="margin-top: 12px;">
                 <input type="hidden" name="temp_id" value="{{ temp_id }}">
                 <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -646,7 +646,7 @@
           <h2>Ask AI for Changes</h2>
           <p class="sub">Revise the currently selected draft without losing your other manual fields.</p>
 
-          <form id="reviseForm" action="{{ url_for('revise') }}" method="post">
+          <form id="reviseForm" action="{{ url_for('main.revise') }}" method="post">
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
             <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -695,7 +695,7 @@
         <div class="card">
           <h2>Final Edit Before Save</h2>
 
-          <form action="{{ url_for('save') }}" method="post">
+          <form action="{{ url_for('main.save') }}" method="post">
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
             <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -755,7 +755,7 @@
 
             <div class="button-row">
               <button type="submit">Save Item</button>
-              <a class="button-link secondary" href="{{ url_for('index') }}">Cancel</a>
+              <a class="button-link secondary" href="{{ url_for('main.index') }}">Cancel</a>
             </div>
           </form>
         </div>

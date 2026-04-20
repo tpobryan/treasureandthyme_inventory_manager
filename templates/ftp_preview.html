@@ -167,7 +167,7 @@
       <p class="sub">Select the photos to upload and adjust their remote filenames if needed.</p>
 
       {% if missing_lots %}
-      <form action="{{ url_for('upload_selected_ftp') }}" method="post">
+      <form action="{{ url_for('admin.upload_selected_ftp') }}" method="post">
         {% for lot in missing_lots %}
           <div class="lot-card">
             <div class="lot-header">
@@ -193,7 +193,7 @@
                 <div class="checkbox-col">
                   <input type="checkbox" class="file-checkbox lot-{{ lot.lot_number }}-checkbox" data-lot="{{ lot.lot_number }}" id="lot_{{ lot.lot_number }}_file_{{ file.original_name }}" name="lot_{{ lot.lot_number }}_file_{{ file.original_name }}" checked>
                 </div>
-                <img src="{{ url_for('uploaded_file', temp_id=lot.folder, filename=file.original_name) }}" alt="Thumbnail">
+                <img src="{{ url_for('main.uploaded_file', temp_id=lot.folder, filename=file.original_name) }}" alt="Thumbnail">
                 <div class="file-input">
                   <label for="lot_{{ lot.lot_number }}_name_{{ file.original_name }}" style="font-size: 0.8rem; margin-bottom: 2px; color: #6b7280; display: block;">Remote Filename (Original: {{ file.original_name }})</label>
                   <input type="text" id="lot_{{ lot.lot_number }}_name_{{ file.original_name }}" name="lot_{{ lot.lot_number }}_name_{{ file.original_name }}" value="{{ file.remote_name }}">
@@ -205,13 +205,13 @@
 
         <div class="button-row">
           <button type="submit">Upload Selected Photos</button>
-          <a class="button-link secondary" href="{{ url_for('admin') }}">Cancel</a>
+          <a class="button-link secondary" href="{{ url_for('admin.admin') }}">Cancel</a>
         </div>
       </form>
       {% else %}
         <p>No missing lots found to upload.</p>
         <div class="button-row">
-          <a class="button-link secondary" href="{{ url_for('admin') }}">Back to Admin</a>
+          <a class="button-link secondary" href="{{ url_for('admin.admin') }}">Back to Admin</a>
         </div>
       {% endif %}
     </div>

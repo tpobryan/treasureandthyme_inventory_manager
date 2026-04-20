@@ -242,12 +242,12 @@
         <p class="sub">A quick view of what is ready, what has been published, and what still needs attention.</p>
       </div>
       <div class="button-row">
-        <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
-        <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
+        <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
+        <a class="button-link secondary" href="{{ url_for('auctions.auctions_overview') }}">Auctions</a>
         <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Manage Items</a>
-        <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
+        <a class="button-link secondary" href="{{ url_for('exports.export_history') }}">Export History</a>
         {% if auth_enabled and is_authenticated %}
-          <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
+          <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">
             <button type="submit" class="button-link secondary">Sign Out</button>
           </form>
         {% endif %}
@@ -262,8 +262,8 @@
             <div class="auction-meta">Status: <strong>{{ current_auction.status }}</strong>. Dashboard counts and exports below are scoped to this auction.</div>
           </div>
           <div class="auction-actions">
-            <form action="{{ url_for('switch_auction_route') }}" method="post">
-              <input type="hidden" name="return_to" value="{{ url_for('dashboard') }}">
+            <form action="{{ url_for('auctions.switch_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('main.dashboard') }}">
               <select name="auction_id" aria-label="Switch auction">
                 {% for auction in auction_list %}
                   <option value="{{ auction.id }}" {% if auction.is_current == '1' %}selected{% endif %}>Auction {{ auction.id }} · {{ auction.status }}</option>
@@ -271,8 +271,8 @@
               </select>
               <button type="submit" class="button-link secondary">Switch Auction</button>
             </form>
-            <form action="{{ url_for('update_auction_status_route') }}" method="post">
-              <input type="hidden" name="return_to" value="{{ url_for('dashboard') }}">
+            <form action="{{ url_for('auctions.update_auction_status_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('main.dashboard') }}">
               <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
               <select name="status" aria-label="Auction status">
                 {% for status in auction_statuses %}
@@ -281,8 +281,8 @@
               </select>
               <button type="submit" class="button-link secondary">Update Status</button>
             </form>
-            <form action="{{ url_for('create_auction_route') }}" method="post">
-              <input type="hidden" name="return_to" value="{{ url_for('dashboard') }}">
+            <form action="{{ url_for('auctions.create_auction_route') }}" method="post">
+              <input type="hidden" name="return_to" value="{{ url_for('main.dashboard') }}">
               <button type="submit" class="button-link secondary">Create Next Auction</button>
             </form>
           </div>
@@ -372,7 +372,7 @@
               <tbody>
                 {% for export in recent_exports %}
                   <tr>
-                    <td><a href="{{ url_for('download_export_archive', filename=export['filename']) }}">{{ export['filename'] }}</a></td>
+                    <td><a href="{{ url_for('exports.download_export_archive', filename=export['filename']) }}">{{ export['filename'] }}</a></td>
                     <td>{{ export['export_type'] }}</td>
                     <td>{{ export['lot_count'] }}</td>
                     <td>{{ export['modified_at'] }}</td>

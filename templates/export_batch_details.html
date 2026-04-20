@@ -120,8 +120,8 @@
   <div class="wrap">
     <div class="card">
       <div class="toolbar">
-        <a class="button-link secondary" href="{{ url_for('export_history') }}">Back to Export History</a>
-        <a class="button-link secondary" href="{{ url_for('download_export_archive', filename=batch['filename']) }}">Download CSV</a>
+        <a class="button-link secondary" href="{{ url_for('exports.export_history') }}">Back to Export History</a>
+        <a class="button-link secondary" href="{{ url_for('exports.download_export_archive', filename=batch['filename']) }}">Download CSV</a>
       </div>
 
       <h1>{{ batch['filename'] }}</h1>

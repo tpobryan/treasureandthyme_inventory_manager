@@ -296,7 +296,7 @@
             Working in <strong>auction {{ current_auction.id }}</strong> with status <strong>{{ current_auction.status }}</strong>. Only lots from this auction are shown and exported here.
           </div>
           <div class="auction-actions">
-            <form action="{{ url_for('switch_auction_route') }}" method="post">
+            <form action="{{ url_for('auctions.switch_auction_route') }}" method="post">
               <input type="hidden" name="return_to" value="{{ url_for('items.manage_items', status=current_filter) }}">
               <select name="auction_id" aria-label="Switch auction">
                 {% for auction in auction_list %}
@@ -305,7 +305,7 @@
               </select>
               <button type="submit" class="secondary">Switch Auction</button>
             </form>
-            <form action="{{ url_for('update_auction_status_route') }}" method="post">
+            <form action="{{ url_for('auctions.update_auction_status_route') }}" method="post">
               <input type="hidden" name="return_to" value="{{ url_for('items.manage_items', status=current_filter) }}">
               <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
               <select name="status" aria-label="Auction status">
@@ -315,7 +315,7 @@
               </select>
               <button type="submit" class="secondary">Update Status</button>
             </form>
-            <form action="{{ url_for('create_auction_route') }}" method="post">
+            <form action="{{ url_for('auctions.create_auction_route') }}" method="post">
               <input type="hidden" name="return_to" value="{{ url_for('items.manage_items', status=current_filter) }}">
               <button type="submit" class="secondary">Create Next Auction</button>
             </form>
@@ -340,7 +340,7 @@
         <a class="filter-pill {% if current_filter == 'all' %}active{% endif %}" href="{{ url_for('items.manage_items', status='all') }}">All ({{ filter_counts['all'] }})</a>
       </div>
 
-      <form action="{{ url_for('export_selected_csv') }}" method="post">
+      <form action="{{ url_for('exports.export_selected_csv') }}" method="post">
         <input type="hidden" name="current_filter" value="{{ current_filter }}">
         <div class="toolbar">
           <div class="toolbar-copy">
@@ -432,11 +432,11 @@
 
         <div class="footer-actions">
           <div class="inline-actions">
-            <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
-            <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
-            <a class="button-link secondary" href="{{ url_for('export_history') }}">Export History</a>
+            <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
+            <a class="button-link secondary" href="{{ url_for('auctions.auctions_overview') }}">Auctions</a>
+            <a class="button-link secondary" href="{{ url_for('exports.export_history') }}">Export History</a>
             {% if auth_enabled and is_authenticated %}
-              <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
+              <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">
                 <button type="submit" class="secondary">Sign Out</button>
               </form>
             {% endif %}

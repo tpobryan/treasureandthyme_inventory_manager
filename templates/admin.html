@@ -191,7 +191,7 @@
       <p class="sub">Advanced actions and FTP synchronization tools.</p>
       
       <div class="button-row" style="margin-bottom: 20px;">
-        <a class="button-link secondary" href="{{ url_for('index') }}">Back to Generator</a>
+        <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Generator</a>
       </div>
 
       <div class="danger-section" style="margin-top: 0; border-top: none; padding-top: 0;">
@@ -200,7 +200,7 @@
           <p class="danger-copy" style="color: #1e3a8a;">
             Retroactively upload photos for a specific saved lot to the AuctionNinja FTP server.
           </p>
-          <form action="{{ url_for('upload_remote_ftp') }}" method="post">
+          <form action="{{ url_for('admin.upload_remote_ftp') }}" method="post">
             <div class="danger-row">
               <div class="field" style="margin-bottom:0;">
                 <label for="upload_lot_number" style="color: #1e3a8a;">Lot Number</label>
@@ -224,7 +224,7 @@
           <p class="danger-copy" style="color: #065f46;">
             Scans your local uploads folder and sends any photos that haven't been uploaded to the FTP server yet.
           </p>
-          <form action="{{ url_for('ftp_preview') }}" method="get">
+          <form action="{{ url_for('admin.ftp_preview') }}" method="get">
             <button type="submit" class="secondary" style="background: #059669; color: white; width: 100%;">
               Preview Missing Lots
             </button>
@@ -237,7 +237,7 @@
             Use this if a saved lot should no longer be included in the auction. This removes the remote FTP photos tied to that lot number from AuctionNinja.
           </p>
 
-          <form action="{{ url_for('delete_remote_upload') }}" method="post">
+          <form action="{{ url_for('admin.delete_remote_upload') }}" method="post">
             <div class="danger-row">
               <div class="field" style="margin-bottom:0;">
                 <label for="lot_number">Lot Number</label>

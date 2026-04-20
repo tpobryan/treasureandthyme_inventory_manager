@@ -7,6 +7,10 @@ import pytest
 import app as app_module
 import database as db_module
 import utils as utils_module
+import routes.exports as exports_module
+import routes.items as items_module
+import routes.main as main_module
+import routes.admin as admin_module
 
 
 @pytest.fixture
@@ -27,10 +31,12 @@ def test_env(tmp_path, monkeypatch):
 
     db_module.DATA_DIR = data_dir
     utils_module.UPLOADS_DIR = uploads_dir
-    app_module.UPLOADS_DIR = uploads_dir
+    items_module.UPLOADS_DIR = uploads_dir
+    main_module.UPLOADS_DIR = uploads_dir
+    admin_module.UPLOADS_DIR = uploads_dir
     db_module.EXPORTS_DIR = exports_dir
     utils_module.EXPORTS_DIR = exports_dir
-    app_module.EXPORTS_DIR = exports_dir
+    exports_module.EXPORTS_DIR = exports_dir
     db_module._DB_INITIALIZED = False
     app_module.app.config["TESTING"] = True
     monkeypatch.setenv("DATABASE_URL", "")
@@ -52,17 +58,19 @@ def test_env(tmp_path, monkeypatch):
     for name, value in original_paths.items():
         if name == "UPLOADS_DIR":
             setattr(utils_module, name, value)
-            setattr(app_module, name, value)
+            setattr(items_module, name, value)
+            setattr(main_module, name, value)
+            setattr(admin_module, name, value)
         elif name == "EXPORTS_DIR":
             setattr(db_module, name, value)
             setattr(utils_module, name, value)
-            setattr(app_module, name, value)
+            setattr(exports_module, name, value)
         else:
             setattr(db_module, name, value)
 
 
 def test_validate_save_form_rejects_blank_title_and_bad_estimates():
-    errors = app_module.validate_save_form(
+    errors = utils_module.validate_save_form(
         {
             "Title": "   ",
             "Low Estimate ($)": "200",
@@ -75,7 +83,7 @@ def test_validate_save_form_rejects_blank_title_and_bad_estimates():
 
 
 def test_validate_save_form_rejects_non_numeric_estimates():
-    errors = app_module.validate_save_form(
+    errors = utils_module.validate_save_form(
         {
             "Title": "Vase",
             "Low Estimate ($)": "abc",
@@ -195,14 +203,14 @@ def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, mon
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.record_ftp_upload(
+    db_module.record_ftp_upload(
         lot_number=3056,
         auction_number="9",
         auction_photo_index=8,
         remote_names=["8_1.jpg", "8_2.jpg"],
     )
 
-    record = app_module.get_ftp_upload_record(3056)
+    record = db_module.get_ftp_upload_record(3056)
 
     assert record is not None
     assert record["auction_number"] == "9"
@@ -216,20 +224,20 @@ def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, mon
 
     assert row == ("9", 8, "8_1.jpg,8_2.jpg")
 
-    app_module.delete_ftp_upload_record(3056)
+    db_module.delete_ftp_upload_record(3056)
 
-    assert app_module.get_ftp_upload_record(3056) is None
+    assert db_module.get_ftp_upload_record(3056) is None
 
 
 def test_reserve_next_auction_photo_index_in_database(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    assert app_module.get_next_auction_photo_index("12") == 1
-    assert app_module.reserve_next_auction_photo_index("12") == 1
-    assert app_module.get_next_auction_photo_index("12") == 2
-    assert app_module.reserve_next_auction_photo_index("12") == 2
-    assert app_module.get_next_auction_photo_index("99") == 1
+    assert db_module.get_next_auction_photo_index("12") == 1
+    assert db_module.reserve_next_auction_photo_index("12") == 1
+    assert db_module.get_next_auction_photo_index("12") == 2
+    assert db_module.reserve_next_auction_photo_index("12") == 2
+    assert db_module.get_next_auction_photo_index("99") == 1
 
     with sqlite3.connect(db_path) as connection:
         rows = connection.execute(
@@ -255,7 +263,7 @@ def test_index_shows_resume_panel_for_active_draft(test_env):
     draft_dir.mkdir(parents=True, exist_ok=True)
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
-    app_module.set_active_draft(
+    utils_module.set_active_draft(
         temp_id="draft123",
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
@@ -274,7 +282,7 @@ def test_discard_draft_removes_folder_and_state(test_env):
     draft_dir.mkdir(parents=True, exist_ok=True)
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
-    app_module.set_active_draft(
+    utils_module.set_active_draft(
         temp_id="draft123",
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
@@ -286,7 +294,7 @@ def test_discard_draft_removes_folder_and_state(test_env):
     assert response.status_code == 200
     assert b"Discarded the last unsaved draft." in response.data
     assert not draft_dir.exists()
-    assert app_module.get_active_draft() is None
+    assert utils_module.get_active_draft() is None
 
 
 def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
@@ -297,23 +305,23 @@ def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
     draft_dir.mkdir(parents=True, exist_ok=True)
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
-    app_module.set_active_draft(
+    utils_module.set_active_draft(
         temp_id="draftdb",
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
     )
 
-    active = app_module.get_active_draft()
+    active = utils_module.get_active_draft()
 
     assert active is not None
     assert active["temp_id"] == "draftdb"
     assert active["seller_notes"] == "Seller note"
     assert active["image_count"] == 1
 
-    app_module.clear_active_draft(temp_id="draftdb")
+    utils_module.clear_active_draft(temp_id="draftdb")
 
-    assert app_module.get_active_draft() is None
+    assert utils_module.get_active_draft() is None
 
 
 def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
@@ -392,7 +400,7 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2005",
             "title": "Lamp",
@@ -444,7 +452,7 @@ def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2005",
             "title": "Lamp",
@@ -465,7 +473,7 @@ def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
             "image_folder": "2005_lamp",
         }
     )
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2006",
             "title": "Chair",
@@ -522,7 +530,7 @@ def test_edit_saved_item_page_loads(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2010",
             "title": "Mirror",
@@ -557,7 +565,7 @@ def test_updating_published_item_marks_needs_update(test_env, tmp_path, monkeypa
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2011",
             "title": "Lamp",
@@ -619,7 +627,7 @@ def test_remove_saved_item_hides_it_from_manage_and_export(test_env, tmp_path, m
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2012",
             "title": "Clock",
@@ -668,7 +676,7 @@ def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, 
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2013",
             "title": "Plate",
@@ -691,7 +699,7 @@ def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, 
             "published_at": "",
         }
     )
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2014",
             "title": "Bowl",
@@ -734,7 +742,7 @@ def test_restore_removed_ready_item_returns_to_ready(test_env, tmp_path, monkeyp
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2015",
             "title": "Tray",
@@ -781,7 +789,7 @@ def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_pa
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2016",
             "title": "Vase",
@@ -859,7 +867,7 @@ def test_export_batch_details_show_current_lot_statuses(test_env, tmp_path, monk
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2040",
             "title": "Lantern",
@@ -919,7 +927,7 @@ def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypat
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2020",
             "title": "Desk",
@@ -942,7 +950,7 @@ def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypat
             "published_at": "",
         }
     )
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "lot_number": "2021",
             "title": "Bottle",
@@ -1030,7 +1038,7 @@ def test_create_and_switch_auction_updates_visible_scope(test_env, tmp_path, mon
     assert b"Created auction 5 and switched to it." in create_response.data
     assert b"auction 5" in create_response.data.lower()
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "auction_id": "4",
             "lot_number": "2100",
@@ -1052,7 +1060,7 @@ def test_create_and_switch_auction_updates_visible_scope(test_env, tmp_path, mon
             "image_folder": "2100_lamp",
         }
     )
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "auction_id": "5",
             "lot_number": "2101",
@@ -1097,7 +1105,7 @@ def test_auctions_overview_shows_statuses_and_counts(test_env, tmp_path, monkeyp
 
     test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "auction_id": "4",
             "lot_number": "2105",
@@ -1119,7 +1127,7 @@ def test_auctions_overview_shows_statuses_and_counts(test_env, tmp_path, monkeyp
             "image_folder": "2105_bottle",
         }
     )
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "auction_id": "5",
             "lot_number": "2106",
@@ -1161,7 +1169,7 @@ def test_move_saved_item_to_another_auction_resets_publish_state(test_env, tmp_p
     test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
     test_env["client"].post("/auctions/switch", data={"auction_id": "4", "return_to": "/"})
 
-    app_module.append_item_record(
+    db_module.append_item_record(
         {
             "auction_id": "4",
             "lot_number": "2110",
@@ -1208,7 +1216,7 @@ def test_bulk_remove_and_restore_items(test_env, tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
     for lot_number, title in [(2030, "Lamp"), (2031, "Chair")]:
-        app_module.append_item_record(
+        db_module.append_item_record(
             {
                 "lot_number": str(lot_number),
                 "title": title,
@@ -1279,7 +1287,7 @@ def test_bulk_move_items_to_another_auction(test_env, tmp_path, monkeypatch):
     test_env["client"].post("/auctions/switch", data={"auction_id": "4", "return_to": "/"})
 
     for lot_number, title in [(2120, "Bench"), (2121, "Basket")]:
-        app_module.append_item_record(
+        db_module.append_item_record(
             {
                 "auction_id": "4",
                 "lot_number": str(lot_number),

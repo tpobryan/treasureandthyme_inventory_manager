@@ -142,10 +142,10 @@
 
       <div class="toolbar">
         <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Back to Manage Items</a>
-        <a class="button-link secondary" href="{{ url_for('auctions_overview') }}">Auctions</a>
-        <a class="button-link secondary" href="{{ url_for('index') }}">Back to Upload</a>
+        <a class="button-link secondary" href="{{ url_for('auctions.auctions_overview') }}">Auctions</a>
+        <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
         {% if auth_enabled and is_authenticated %}
-          <form action="{{ url_for('logout') }}" method="post" style="margin:0;">
+          <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">
             <button type="submit" class="button-link secondary">Sign Out</button>
           </form>
         {% endif %}
@@ -173,8 +173,8 @@
                 <td>{{ archive['size_bytes'] }} bytes</td>
                 <td>
                   <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <a class="button-link secondary" href="{{ url_for('export_batch_details', filename=archive['filename']) }}">Details</a>
-                    <a class="button-link secondary" href="{{ url_for('download_export_archive', filename=archive['filename']) }}">Download</a>
+                    <a class="button-link secondary" href="{{ url_for('exports.export_batch_details', filename=archive['filename']) }}">Details</a>
+                    <a class="button-link secondary" href="{{ url_for('exports.download_export_archive', filename=archive['filename']) }}">Download</a>
                   </div>
                 </td>
               </tr>
