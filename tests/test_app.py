@@ -263,12 +263,15 @@ def test_index_shows_resume_panel_for_active_draft(test_env):
     draft_dir.mkdir(parents=True, exist_ok=True)
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
-    utils_module.set_active_draft(
+    db_module.set_active_draft(
         temp_id="draft123",
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
     )
+
+    with test_env["client"].session_transaction() as sess:
+        sess["active_temp_id"] = "draft123"
 
     response = test_env["client"].get("/")
 
@@ -282,19 +285,22 @@ def test_discard_draft_removes_folder_and_state(test_env):
     draft_dir.mkdir(parents=True, exist_ok=True)
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
-    utils_module.set_active_draft(
+    db_module.set_active_draft(
         temp_id="draft123",
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
     )
 
+    with test_env["client"].session_transaction() as sess:
+        sess["active_temp_id"] = "draft123"
+
     response = test_env["client"].post("/discard_draft", follow_redirects=True)
 
     assert response.status_code == 200
     assert b"Discarded the last unsaved draft." in response.data
     assert not draft_dir.exists()
-    assert utils_module.get_active_draft() is None
+    assert db_module.fetch_active_draft("draft123") is None
 
 
 def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
@@ -305,23 +311,22 @@ def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
     draft_dir.mkdir(parents=True, exist_ok=True)
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
-    utils_module.set_active_draft(
+    db_module.set_active_draft(
         temp_id="draftdb",
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
     )
 
-    active = utils_module.get_active_draft()
+    active = db_module.fetch_active_draft("draftdb")
 
     assert active is not None
     assert active["temp_id"] == "draftdb"
     assert active["seller_notes"] == "Seller note"
-    assert active["image_count"] == 1
 
-    utils_module.clear_active_draft(temp_id="draftdb")
+    db_module.clear_active_draft(temp_id="draftdb")
 
-    assert utils_module.get_active_draft() is None
+    assert db_module.fetch_active_draft("draftdb") is None
 
 
 def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
