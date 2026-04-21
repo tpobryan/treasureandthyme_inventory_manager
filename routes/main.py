@@ -346,7 +346,7 @@ def save():
     if not temp_id or not temp_dir.exists():
         # If the folder is missing, it might be a double-submit. 
         # Only flash an error if the draft is still active in the database.
-        draft = fetch_active_draft()
+        draft = get_active_draft()
         if draft and draft.get("temp_id") == temp_id:
             flash("Could not find uploaded images for this draft.")
         return redirect(url_for("main.index"))
@@ -446,10 +446,15 @@ def set_next_lot():
 
 @main_bp.route("/reset", methods=["POST"])
 def reset():
-    if UPLOADS_DIR.exists():
-        shutil.rmtree(UPLOADS_DIR)
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    clear_active_draft()
+    draft = get_active_draft()
+    if draft:
+        temp_id = draft["temp_id"]
+        temp_dir = UPLOADS_DIR / temp_id
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+        clear_active_draft(temp_id)
+    else:
+        clear_active_draft()
     flash("Temporary uploads cleared.")
     return redirect(url_for("main.index"))
 

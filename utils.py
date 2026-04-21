@@ -17,6 +17,7 @@ from database import (
     fetch_active_draft as db_fetch_active_draft,
     set_active_draft as db_set_active_draft,
     clear_active_draft as db_clear_active_draft,
+    fetch_all_active_drafts as db_fetch_all_active_drafts,
 )
 
 UPLOADS_DIR = DATA_DIR / "uploads"
@@ -76,19 +77,50 @@ def load_saved_files_for_temp_id(temp_id: str) -> list[Path]:
     return sorted([p for p in temp_dir.iterdir() if p.is_file()])
 
 def get_active_draft() -> dict[str, Any] | None:
-    draft = db_fetch_active_draft()
+    temp_id = session.get("active_temp_id")
+    if not temp_id:
+        return None
+
+    draft = db_fetch_active_draft(temp_id)
     if not draft:
+        session.pop("active_temp_id", None)
         return None
 
     temp_id = draft["temp_id"]
     saved_files = load_saved_files_for_temp_id(temp_id)
     if not saved_files:
         db_clear_active_draft(temp_id=temp_id)
+        session.pop("active_temp_id", None)
         return None
 
     draft["image_files"] = [p.name for p in saved_files]
     draft["image_count"] = len(saved_files)
     return draft
+
+def get_orphaned_drafts() -> list[dict[str, Any]]:
+    active_temp_id = session.get("active_temp_id")
+    all_drafts = db_fetch_all_active_drafts()
+    
+    orphans = []
+    for draft in all_drafts:
+        if draft["temp_id"] == active_temp_id:
+            continue
+            
+        saved_files = load_saved_files_for_temp_id(draft["temp_id"])
+        if not saved_files:
+            db_clear_active_draft(draft["temp_id"])
+            continue
+            
+        draft["image_count"] = len(saved_files)
+        
+        title = draft.get("form", {}).get("Title", "").strip()
+        if not title and draft.get("options"):
+            title = draft["options"][0].get("title", "").strip()
+        draft["display_title"] = title or "Untitled Draft"
+        
+        orphans.append(draft)
+        
+    return orphans
 
 def set_active_draft(
     temp_id: str,
@@ -97,6 +129,7 @@ def set_active_draft(
     form: dict[str, str],
     revision_request: str = "",
 ) -> None:
+    session["active_temp_id"] = temp_id
     db_set_active_draft(
         temp_id=temp_id,
         seller_notes=seller_notes,
@@ -106,7 +139,12 @@ def set_active_draft(
     )
 
 def clear_active_draft(temp_id: str | None = None) -> None:
-    db_clear_active_draft(temp_id=temp_id)
+    target_id = temp_id or session.get("active_temp_id")
+    if target_id:
+        db_clear_active_draft(temp_id=target_id)
+    
+    if session.get("active_temp_id") == target_id or not temp_id:
+        session.pop("active_temp_id", None)
 
 def current_edit_context(
     temp_id: str,
