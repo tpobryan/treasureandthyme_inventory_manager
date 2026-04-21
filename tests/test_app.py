@@ -303,6 +303,37 @@ def test_discard_draft_removes_folder_and_state(test_env):
     assert db_module.fetch_active_draft("draft123") is None
 
 
+def test_reorder_draft_photos(test_env):
+    draft_dir = test_env["uploads_dir"] / "draft123"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "c.jpg").write_bytes(b"fake image c")
+    (draft_dir / "a.jpg").write_bytes(b"fake image a")
+    (draft_dir / "b.jpg").write_bytes(b"fake image b")
+
+    db_module.set_active_draft(
+        temp_id="draft123",
+        seller_notes="",
+        options=[{"rank": 1, "title": "Draft title"}],
+        form={"Title": "Draft title"},
+    )
+
+    with test_env["client"].session_transaction() as sess:
+        sess["active_temp_id"] = "draft123"
+
+    response = test_env["client"].post(
+        "/reorder_draft_photos",
+        data={
+            "temp_id": "draft123",
+            "ordered_files": ["b.jpg", "c.jpg", "a.jpg"]
+        },
+        follow_redirects=True
+    )
+
+    assert response.status_code == 200
+    assert b"Photos reordered successfully." in response.data
+    files = sorted([p.name for p in draft_dir.iterdir() if p.is_file()])
+    assert files == ["01_b.jpg", "02_c.jpg", "03_a.jpg"]
+
 def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")

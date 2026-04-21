@@ -118,6 +118,15 @@
       border-radius: 12px;
       overflow: hidden;
       background: #fff;
+      position: relative;
+      cursor: grab;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .thumb.dragging {
+      opacity: 0.5;
+      transform: scale(0.98);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
     }
 
     .thumb img {
@@ -126,6 +135,20 @@
       height: 180px;
       object-fit: cover;
       background: #f3f4f6;
+    }
+
+    .drag-handle {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 6px;
+      padding: 4px 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      color: #4b5563;
+      font-weight: bold;
+      z-index: 2;
+      pointer-events: none;
     }
 
     .thumb-name {
@@ -491,11 +514,22 @@
             </form>
           </div>
 
-          <div class="thumb-grid">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div style="font-weight: 600; color: var(--muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">Draft Photos</div>
+            <button type="submit" form="reorderForm" id="saveOrderBtn" class="small-button" style="display: none; padding: 6px 12px; font-size: 0.85rem; background: #10b981;">Save Order</button>
+          </div>
+
+          <form id="reorderForm" action="{{ url_for('main.reorder_draft_photos') }}" method="post" style="display: none;">
+            <input type="hidden" name="temp_id" value="{{ temp_id }}">
+            <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
+          </form>
+
+          <div class="thumb-grid" id="photoGrid">
             {% for image_file in image_files %}
-              <div class="thumb">
-                <img src="{{ image_url_prefix }}{{ image_file }}" alt="Uploaded image">
-                <div class="thumb-name">{{ image_file }}</div>
+              <div class="thumb" draggable="true">
+                <div class="drag-handle">&#9776;</div>
+                <img src="{{ image_url_prefix }}{{ image_file }}" alt="Uploaded image" draggable="false">
+                <div class="thumb-name" data-filename="{{ image_file }}">{{ image_file }}</div>
                 <div class="thumb-actions">
                   <form action="{{ url_for('main.remove_draft_photo') }}" method="post">
                     <input type="hidden" name="temp_id" value="{{ temp_id }}">
@@ -769,6 +803,51 @@
     const reviseLoadingOverlay = document.getElementById("reviseLoadingOverlay");
     const reviseLoadingTitle = reviseLoadingOverlay.querySelector(".loading-title");
     const reviseLoadingCopy = reviseLoadingOverlay.querySelector(".loading-copy");
+
+    const grid = document.getElementById('photoGrid');
+    const saveOrderBtn = document.getElementById('saveOrderBtn');
+    const reorderForm = document.getElementById('reorderForm');
+    let draggedItem = null;
+
+    if (grid && saveOrderBtn && reorderForm) {
+      grid.addEventListener('dragstart', (e) => {
+        draggedItem = e.target.closest('.thumb');
+        if (draggedItem) {
+          setTimeout(() => draggedItem.classList.add('dragging'), 0);
+        }
+      });
+
+      grid.addEventListener('dragend', (e) => {
+        if (draggedItem) {
+          draggedItem.classList.remove('dragging');
+        }
+        draggedItem = null;
+      });
+
+      grid.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const currentItem = document.querySelector('.dragging');
+        if (!currentItem) return;
+
+        const target = e.target.closest('.thumb:not(.dragging)');
+        if (target && target !== currentItem) {
+          const box = target.getBoundingClientRect();
+          const isAfter = (e.clientX - box.left) > (box.width / 2);
+          isAfter ? target.after(currentItem) : target.before(currentItem);
+          saveOrderBtn.style.display = 'inline-block';
+        }
+      });
+
+      reorderForm.addEventListener('submit', (e) => {
+        grid.querySelectorAll('.thumb-name').forEach(nameDiv => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'ordered_files';
+          input.value = nameDiv.getAttribute('data-filename');
+          reorderForm.appendChild(input);
+        });
+      });
+    }
 
     let reviseStepTimer = null;
     let reviseSubmitting = false;

@@ -1,6 +1,8 @@
+import re
 import shutil
+import uuid
 from pathlib import Path
-from flask import Blueprint, render_template, request, flash, redirect, url_for, send_from_directory, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, send_from_directory, current_app, session
 from werkzeug.utils import secure_filename
 
 from auctionninja_generator import AuctionNinjaGenerator
@@ -27,6 +29,7 @@ from utils import (
     DEFAULT_CATEGORIES,
     load_saved_files_for_temp_id,
     get_active_draft,
+    get_orphaned_drafts,
     set_active_draft,
     clear_active_draft,
     current_edit_context,
@@ -78,6 +81,7 @@ def index():
         "index.html",
         next_lot=get_next_lot_preview(),
         active_draft=active_draft,
+        orphaned_drafts=get_orphaned_drafts(),
     )
 
 @main_bp.route("/dashboard", methods=["GET"])
@@ -222,6 +226,55 @@ def remove_draft_photo():
     if not saved_files:
         flash("This draft has no photos left. Please add at least one photo before revising or saving.")
 
+    return render_edit_page(
+        temp_id=temp_id,
+        saved_files=saved_files,
+        seller_notes=seller_notes,
+        options=options,
+        form=form,
+    )
+
+@main_bp.route("/reorder_draft_photos", methods=["POST"])
+def reorder_draft_photos():
+    temp_id = request.form.get("temp_id", "").strip()
+    seller_notes = request.form.get("seller_notes", "").strip()
+    ordered_files = request.form.getlist("ordered_files")
+    saved_files, options, form = current_edit_context(temp_id, seller_notes)
+
+    temp_dir = UPLOADS_DIR / temp_id
+    if not temp_id or not temp_dir.exists():
+        flash("Could not find uploaded images for this draft.")
+        return redirect(url_for("main.index"))
+
+    valid_files = []
+    for filename in ordered_files:
+        safe_name = secure_filename(filename)
+        target = temp_dir / safe_name
+        if target.exists() and target.is_file():
+            valid_files.append(target)
+
+    if valid_files:
+        temp_mappings = []
+        for target in valid_files:
+            temp_path = target.with_name(f".tmp_{uuid.uuid4().hex}_{target.name}")
+            target.rename(temp_path)
+            temp_mappings.append((temp_path, target.name))
+
+        for index, (temp_path, original_name) in enumerate(temp_mappings, start=1):
+            clean_name = re.sub(r"^\d{2,3}_", "", original_name)
+            new_name = f"{index:02d}_{clean_name}"
+            final_path = temp_dir / new_name
+
+            counter = 1
+            while final_path.exists():
+                final_path = temp_dir / f"{index:02d}_{counter}_{clean_name}"
+                counter += 1
+
+            temp_path.rename(final_path)
+
+        flash("Photos reordered successfully.")
+
+    saved_files = load_saved_files_for_temp_id(temp_id)
     return render_edit_page(
         temp_id=temp_id,
         saved_files=saved_files,
@@ -432,3 +485,10 @@ def discard_draft():
     clear_active_draft(temp_id=temp_id)
     flash("Discarded the last unsaved draft.")
     return redirect(url_for("main.index"))
+
+@main_bp.route("/recover_draft/<temp_id>", methods=["POST"])
+def recover_draft(temp_id: str):
+    # Claim the orphaned draft into the current browser session
+    session["active_temp_id"] = temp_id
+    flash("Draft recovered successfully!")
+    return redirect(url_for("main.resume_draft"))

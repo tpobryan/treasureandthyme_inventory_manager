@@ -24,6 +24,7 @@ def fix_templates():
         'analyze': 'main.analyze',
         'choose_option': 'main.choose_option',
         'add_draft_photos': 'main.add_draft_photos',
+        'reorder_draft_photos': 'main.reorder_draft_photos',
         'remove_draft_photo': 'main.remove_draft_photo',
         'revise': 'main.revise',
         'save': 'main.save',
