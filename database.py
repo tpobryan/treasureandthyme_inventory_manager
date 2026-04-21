@@ -1741,7 +1741,7 @@ def set_active_draft(
 
     options_json = json.dumps(options)
     form_json = json.dumps(form)
-    slot_name = f"auction:{get_current_auction_id()}"
+    slot_name = temp_id
 
     try:
         cursor = connection.cursor()
@@ -1785,45 +1785,33 @@ def set_active_draft(
         connection.close()
 
 
-def clear_active_draft(temp_id: str | None = None) -> None:
+def clear_active_draft(temp_id: str) -> None:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
-    slot_name = f"auction:{get_current_auction_id()}"
+
+    if not temp_id:
+        return
 
     try:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
-        if temp_id:
-            cursor.execute(
-                f"SELECT temp_id FROM active_drafts WHERE slot_name = {placeholder}",
-                (slot_name,),
-            )
-            record = cursor.fetchone()
-            current_temp_id = ""
-            if record:
-                if isinstance(record, sqlite3.Row):
-                    current_temp_id = str(record["temp_id"])
-                elif isinstance(record, dict):
-                    current_temp_id = str(record.get("temp_id", ""))
-                else:
-                    current_temp_id = str(record[0])
-            if current_temp_id != temp_id:
-                return
         cursor.execute(
-            f"DELETE FROM active_drafts WHERE slot_name = {placeholder}",
-            (slot_name,),
+            f"DELETE FROM active_drafts WHERE temp_id = {placeholder}",
+            (temp_id,),
         )
         connection.commit()
     finally:
         connection.close()
 
 
-def fetch_active_draft() -> dict[str, Any] | None:
+def fetch_active_draft(temp_id: str) -> dict[str, Any] | None:
+    if not temp_id:
+        return None
+
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
-    slot_name = f"auction:{get_current_auction_id()}"
 
     try:
         cursor = connection.cursor()
@@ -1832,9 +1820,9 @@ def fetch_active_draft() -> dict[str, Any] | None:
             f"""
             SELECT temp_id, seller_notes, options_json, form_json, revision_request
             FROM active_drafts
-            WHERE slot_name = {placeholder}
+            WHERE temp_id = {placeholder}
             """,
-            (slot_name,),
+            (temp_id,),
         )
         record = cursor.fetchone()
     finally:
@@ -1872,6 +1860,57 @@ def fetch_active_draft() -> dict[str, Any] | None:
         "form": form,
         "revision_request": str(raw.get("revision_request", "")).strip(),
     }
+
+
+def fetch_all_active_drafts() -> list[dict[str, Any]]:
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT temp_id, seller_notes, options_json, form_json, revision_request, updated_at
+            FROM active_drafts
+            ORDER BY updated_at DESC
+            """
+        )
+        records = cursor.fetchall()
+    finally:
+        connection.close()
+
+    drafts = []
+    for record in records:
+        if isinstance(record, sqlite3.Row):
+            raw = {key: record[key] for key in record.keys()}
+        elif isinstance(record, dict):
+            raw = dict(record)
+        else:
+            continue
+
+        temp_id = str(raw.get("temp_id", "")).strip()
+        if not temp_id:
+            continue
+
+        try:
+            options = json.loads(str(raw.get("options_json", "[]")))
+            form = json.loads(str(raw.get("form_json", "{}")))
+        except json.JSONDecodeError:
+            continue
+
+        if not isinstance(options, list) or not isinstance(form, dict):
+            continue
+
+        drafts.append({
+            "temp_id": temp_id,
+            "seller_notes": str(raw.get("seller_notes", "")).strip(),
+            "options": options,
+            "form": form,
+            "revision_request": str(raw.get("revision_request", "")).strip(),
+            "updated_at": str(raw.get("updated_at", "")).strip(),
+        })
+    return drafts
 
 
 def record_export_batch(
