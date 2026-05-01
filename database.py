@@ -222,6 +222,7 @@ def ensure_item_store_ready() -> None:
                 CREATE TABLE IF NOT EXISTS active_drafts (
                     slot_name TEXT PRIMARY KEY,
                     temp_id TEXT NOT NULL,
+                    owner_token TEXT,
                     seller_notes TEXT NOT NULL,
                     options_json TEXT NOT NULL,
                     form_json TEXT NOT NULL,
@@ -230,6 +231,7 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_sqlite_column(cursor, "active_drafts", "owner_token", "TEXT")
             _bootstrap_auction_rows(cursor, dialect)
             _backfill_auction_scope(cursor, dialect)
         else:
@@ -323,6 +325,7 @@ def ensure_item_store_ready() -> None:
                 CREATE TABLE IF NOT EXISTS active_drafts (
                     slot_name VARCHAR(64) PRIMARY KEY,
                     temp_id VARCHAR(255) NOT NULL,
+                    owner_token VARCHAR(255) NULL,
                     seller_notes TEXT NOT NULL,
                     options_json LONGTEXT NOT NULL,
                     form_json LONGTEXT NOT NULL,
@@ -331,6 +334,7 @@ def ensure_item_store_ready() -> None:
                 )
                 """
             )
+            _ensure_mysql_column(cursor, "active_drafts", "owner_token", "VARCHAR(255) NULL")
             _bootstrap_auction_rows(cursor, dialect)
             _backfill_auction_scope(cursor, dialect)
         connection.commit()
@@ -1733,6 +1737,7 @@ def set_active_draft(
     seller_notes: str,
     options: list[dict],
     form: dict[str, str],
+    owner_token: str = "",
     revision_request: str = "",
 ) -> None:
     ensure_item_store_ready()
@@ -1751,14 +1756,15 @@ def set_active_draft(
                 INSERT OR REPLACE INTO active_drafts (
                     slot_name,
                     temp_id,
+                    owner_token,
                     seller_notes,
                     options_json,
                     form_json,
                     revision_request,
                     updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """,
-                (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
+                (slot_name, temp_id, owner_token, seller_notes, options_json, form_json, revision_request),
             )
         else:
             cursor.execute(
@@ -1766,26 +1772,28 @@ def set_active_draft(
                 INSERT INTO active_drafts (
                     slot_name,
                     temp_id,
+                    owner_token,
                     seller_notes,
                     options_json,
                     form_json,
                     revision_request
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     temp_id = VALUES(temp_id),
+                    owner_token = VALUES(owner_token),
                     seller_notes = VALUES(seller_notes),
                     options_json = VALUES(options_json),
                     form_json = VALUES(form_json),
                     revision_request = VALUES(revision_request)
                 """,
-                (slot_name, temp_id, seller_notes, options_json, form_json, revision_request),
+                (slot_name, temp_id, owner_token, seller_notes, options_json, form_json, revision_request),
             )
         connection.commit()
     finally:
         connection.close()
 
 
-def clear_active_draft(temp_id: str) -> None:
+def clear_active_draft(temp_id: str, owner_token: str | None = None) -> None:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
@@ -1796,16 +1804,22 @@ def clear_active_draft(temp_id: str) -> None:
     try:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
-        cursor.execute(
-            f"DELETE FROM active_drafts WHERE temp_id = {placeholder}",
-            (temp_id,),
-        )
+        if owner_token:
+            cursor.execute(
+                f"DELETE FROM active_drafts WHERE temp_id = {placeholder} AND owner_token = {placeholder}",
+                (temp_id, owner_token),
+            )
+        else:
+            cursor.execute(
+                f"DELETE FROM active_drafts WHERE temp_id = {placeholder}",
+                (temp_id,),
+            )
         connection.commit()
     finally:
         connection.close()
 
 
-def fetch_active_draft(temp_id: str) -> dict[str, Any] | None:
+def fetch_active_draft(temp_id: str, owner_token: str | None = None) -> dict[str, Any] | None:
     if not temp_id:
         return None
 
@@ -1816,14 +1830,24 @@ def fetch_active_draft(temp_id: str) -> dict[str, Any] | None:
     try:
         cursor = connection.cursor()
         placeholder = "?" if dialect == "sqlite" else "%s"
-        cursor.execute(
-            f"""
-            SELECT temp_id, seller_notes, options_json, form_json, revision_request
-            FROM active_drafts
-            WHERE temp_id = {placeholder}
-            """,
-            (temp_id,),
-        )
+        if owner_token:
+            cursor.execute(
+                f"""
+                SELECT temp_id, owner_token, seller_notes, options_json, form_json, revision_request
+                FROM active_drafts
+                WHERE temp_id = {placeholder} AND owner_token = {placeholder}
+                """,
+                (temp_id, owner_token),
+            )
+        else:
+            cursor.execute(
+                f"""
+                SELECT temp_id, owner_token, seller_notes, options_json, form_json, revision_request
+                FROM active_drafts
+                WHERE temp_id = {placeholder}
+                """,
+                (temp_id,),
+            )
         record = cursor.fetchone()
     finally:
         connection.close()
@@ -1855,6 +1879,7 @@ def fetch_active_draft(temp_id: str) -> dict[str, Any] | None:
 
     return {
         "temp_id": temp_id,
+        "owner_token": str(raw.get("owner_token", "")).strip(),
         "seller_notes": str(raw.get("seller_notes", "")).strip(),
         "options": options,
         "form": form,
@@ -1862,20 +1887,32 @@ def fetch_active_draft(temp_id: str) -> dict[str, Any] | None:
     }
 
 
-def fetch_all_active_drafts() -> list[dict[str, Any]]:
+def fetch_all_active_drafts(owner_token: str | None = None) -> list[dict[str, Any]]:
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     assert connection is not None
 
     try:
         cursor = connection.cursor()
-        cursor.execute(
-            """
-            SELECT temp_id, seller_notes, options_json, form_json, revision_request, updated_at
-            FROM active_drafts
-            ORDER BY updated_at DESC
-            """
-        )
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        if owner_token:
+            cursor.execute(
+                f"""
+                SELECT temp_id, owner_token, seller_notes, options_json, form_json, revision_request, updated_at
+                FROM active_drafts
+                WHERE owner_token = {placeholder}
+                ORDER BY updated_at DESC
+                """,
+                (owner_token,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT temp_id, owner_token, seller_notes, options_json, form_json, revision_request, updated_at
+                FROM active_drafts
+                ORDER BY updated_at DESC
+                """
+            )
         records = cursor.fetchall()
     finally:
         connection.close()
@@ -1904,6 +1941,7 @@ def fetch_all_active_drafts() -> list[dict[str, Any]]:
 
         drafts.append({
             "temp_id": temp_id,
+            "owner_token": str(raw.get("owner_token", "")).strip(),
             "seller_notes": str(raw.get("seller_notes", "")).strip(),
             "options": options,
             "form": form,

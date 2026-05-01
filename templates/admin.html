@@ -201,6 +201,7 @@
             Retroactively upload photos for a specific saved lot to the AuctionNinja FTP server.
           </p>
           <form action="{{ url_for('admin.upload_remote_ftp') }}" method="post">
+            {{ csrf_input() }}
             <div class="danger-row">
               <div class="field" style="margin-bottom:0;">
                 <label for="upload_lot_number" style="color: #1e3a8a;">Lot Number</label>
@@ -238,6 +239,7 @@
           </p>
 
           <form action="{{ url_for('admin.delete_remote_upload') }}" method="post">
+            {{ csrf_input() }}
             <div class="danger-row">
               <div class="field" style="margin-bottom:0;">
                 <label for="lot_number">Lot Number</label>

@@ -113,6 +113,7 @@
     {% endwith %}
 
     <form method="post">
+      {{ csrf_input() }}
       <input type="hidden" name="next" value="{{ next_url }}">
       <div class="field">
         <label for="username">Username</label>

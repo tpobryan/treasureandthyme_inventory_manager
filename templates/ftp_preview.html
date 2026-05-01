@@ -168,6 +168,7 @@
 
       {% if missing_lots %}
       <form action="{{ url_for('admin.upload_selected_ftp') }}" method="post">
+        {{ csrf_input() }}
         {% for lot in missing_lots %}
           <div class="lot-card">
             <div class="lot-header">

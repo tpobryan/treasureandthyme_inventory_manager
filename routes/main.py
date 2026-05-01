@@ -27,6 +27,7 @@ from database import (
 from utils import (
     UPLOADS_DIR,
     DEFAULT_CATEGORIES,
+    get_draft_owner_token,
     load_saved_files_for_temp_id,
     get_active_draft,
     get_orphaned_drafts,
@@ -42,6 +43,7 @@ from utils import (
     save_uploaded_files,
     save_uploaded_files_to_dir,
 )
+from database import fetch_active_draft as db_fetch_active_draft
 
 main_bp = Blueprint("main", __name__)
 generator = AuctionNinjaGenerator()
@@ -493,7 +495,11 @@ def discard_draft():
 
 @main_bp.route("/recover_draft/<temp_id>", methods=["POST"])
 def recover_draft(temp_id: str):
-    # Claim the orphaned draft into the current browser session
+    draft = db_fetch_active_draft(temp_id, owner_token=get_draft_owner_token())
+    if not draft:
+        flash("That draft is not available in this browser session.")
+        return redirect(url_for("main.index"))
+
     session["active_temp_id"] = temp_id
     flash("Draft recovered successfully!")
     return redirect(url_for("main.resume_draft"))

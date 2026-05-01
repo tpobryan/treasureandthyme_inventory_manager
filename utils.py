@@ -2,11 +2,14 @@ import csv
 import io
 import os
 import re
+import secrets
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from flask import request, session, flash, current_app
+from markupsafe import Markup
 from werkzeug.utils import secure_filename
 
 from image_processor import ALLOWED_EXTENSIONS, HEIF_SUPPORT_ENABLED, optimize_image
@@ -70,6 +73,38 @@ def auth_password() -> str:
 def is_authenticated() -> bool:
     return bool(session.get("authenticated"))
 
+def get_draft_owner_token() -> str:
+    token = str(session.get("draft_owner_token", "")).strip()
+    if token:
+        return token
+    token = secrets.token_urlsafe(24)
+    session["draft_owner_token"] = token
+    return token
+
+def get_csrf_token() -> str:
+    token = str(session.get("csrf_token", "")).strip()
+    if token:
+        return token
+    token = secrets.token_urlsafe(24)
+    session["csrf_token"] = token
+    return token
+
+def csrf_input() -> Markup:
+    return Markup(
+        f'<input type="hidden" name="csrf_token" value="{get_csrf_token()}">'
+    )
+
+def validate_csrf_token(submitted_token: str) -> bool:
+    session_token = str(session.get("csrf_token", "")).strip()
+    submitted = str(submitted_token or "").strip()
+    return bool(session_token and submitted and secrets.compare_digest(session_token, submitted))
+
+def is_safe_local_url(target: str) -> bool:
+    if not target:
+        return False
+    parsed = urlsplit(target)
+    return not parsed.scheme and not parsed.netloc and target.startswith("/")
+
 def load_saved_files_for_temp_id(temp_id: str) -> list[Path]:
     temp_dir = UPLOADS_DIR / temp_id
     if not temp_id or not temp_dir.exists():
@@ -81,7 +116,7 @@ def get_active_draft() -> dict[str, Any] | None:
     if not temp_id:
         return None
 
-    draft = db_fetch_active_draft(temp_id)
+    draft = db_fetch_active_draft(temp_id, owner_token=get_draft_owner_token())
     if not draft:
         session.pop("active_temp_id", None)
         return None
@@ -89,7 +124,7 @@ def get_active_draft() -> dict[str, Any] | None:
     temp_id = draft["temp_id"]
     saved_files = load_saved_files_for_temp_id(temp_id)
     if not saved_files:
-        db_clear_active_draft(temp_id=temp_id)
+        db_clear_active_draft(temp_id=temp_id, owner_token=get_draft_owner_token())
         session.pop("active_temp_id", None)
         return None
 
@@ -99,7 +134,7 @@ def get_active_draft() -> dict[str, Any] | None:
 
 def get_orphaned_drafts() -> list[dict[str, Any]]:
     active_temp_id = session.get("active_temp_id")
-    all_drafts = db_fetch_all_active_drafts()
+    all_drafts = db_fetch_all_active_drafts(owner_token=get_draft_owner_token())
     
     orphans = []
     for draft in all_drafts:
@@ -108,7 +143,7 @@ def get_orphaned_drafts() -> list[dict[str, Any]]:
             
         saved_files = load_saved_files_for_temp_id(draft["temp_id"])
         if not saved_files:
-            db_clear_active_draft(draft["temp_id"])
+            db_clear_active_draft(draft["temp_id"], owner_token=get_draft_owner_token())
             continue
             
         draft["image_count"] = len(saved_files)
@@ -132,6 +167,7 @@ def set_active_draft(
     session["active_temp_id"] = temp_id
     db_set_active_draft(
         temp_id=temp_id,
+        owner_token=get_draft_owner_token(),
         seller_notes=seller_notes,
         options=options,
         form=form,
@@ -141,7 +177,7 @@ def set_active_draft(
 def clear_active_draft(temp_id: str | None = None) -> None:
     target_id = temp_id or session.get("active_temp_id")
     if target_id:
-        db_clear_active_draft(temp_id=target_id)
+        db_clear_active_draft(temp_id=target_id, owner_token=get_draft_owner_token())
     
     if session.get("active_temp_id") == target_id or not temp_id:
         session.pop("active_temp_id", None)

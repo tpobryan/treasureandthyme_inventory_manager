@@ -146,6 +146,7 @@
         <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
         {% if auth_enabled and is_authenticated %}
           <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">
+            {{ csrf_input() }}
             <button type="submit" class="button-link secondary">Sign Out</button>
           </form>
         {% endif %}

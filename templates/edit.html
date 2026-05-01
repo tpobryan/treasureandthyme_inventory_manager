@@ -463,6 +463,7 @@
             <p class="photo-tools-copy">Add or remove photos here before using Revise with AI.</p>
 
             <form action="{{ url_for('main.add_draft_photos') }}" method="post" enctype="multipart/form-data">
+              {{ csrf_input() }}
               <input type="hidden" name="temp_id" value="{{ temp_id }}">
               <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -520,6 +521,7 @@
           </div>
 
           <form id="reorderForm" action="{{ url_for('main.reorder_draft_photos') }}" method="post" style="display: none;">
+            {{ csrf_input() }}
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
             <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
           </form>
@@ -532,6 +534,7 @@
                 <div class="thumb-name" data-filename="{{ image_file }}">{{ image_file }}</div>
                 <div class="thumb-actions">
                   <form action="{{ url_for('main.remove_draft_photo') }}" method="post">
+                    {{ csrf_input() }}
                     <input type="hidden" name="temp_id" value="{{ temp_id }}">
                     <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
                     <input type="hidden" name="filename" value="{{ image_file }}">
@@ -622,6 +625,7 @@
               </div>
 
               <form action="{{ url_for('main.choose_option') }}" method="post" style="margin-top: 12px;">
+                {{ csrf_input() }}
                 <input type="hidden" name="temp_id" value="{{ temp_id }}">
                 <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -681,6 +685,7 @@
           <p class="sub">Revise the currently selected draft without losing your other manual fields.</p>
 
           <form id="reviseForm" action="{{ url_for('main.revise') }}" method="post">
+            {{ csrf_input() }}
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
             <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 
@@ -730,6 +735,7 @@
           <h2>Final Edit Before Save</h2>
 
           <form action="{{ url_for('main.save') }}" method="post">
+            {{ csrf_input() }}
             <input type="hidden" name="temp_id" value="{{ temp_id }}">
             <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
 

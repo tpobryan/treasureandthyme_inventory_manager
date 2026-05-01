@@ -209,12 +209,14 @@
           <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
           {% if auth_enabled and is_authenticated %}
             <form class="inline-form" action="{{ url_for('auth.logout') }}" method="post">
+              {{ csrf_input() }}
               <button type="submit" class="secondary">Sign Out</button>
             </form>
           {% endif %}
         </div>
         <div class="toolbar-right">
           <form class="inline-form" action="{{ url_for('auctions.create_auction_route') }}" method="post">
+            {{ csrf_input() }}
             <input type="hidden" name="return_to" value="{{ url_for('auctions.auctions_overview') }}">
             <button type="submit">Create Next Auction</button>
           </form>
@@ -257,12 +259,14 @@
                 <td>
                   <div class="inline-form" style="margin-bottom:8px;">
                     <form class="inline-form" action="{{ url_for('auctions.switch_auction_route') }}" method="post">
+                      {{ csrf_input() }}
                       <input type="hidden" name="return_to" value="{{ url_for('auctions.auctions_overview') }}">
                       <input type="hidden" name="auction_id" value="{{ auction.id }}">
                       <button type="submit" class="secondary">Work In This Auction</button>
                     </form>
                   </div>
                   <form class="inline-form" action="{{ url_for('auctions.update_auction_status_route') }}" method="post">
+                    {{ csrf_input() }}
                     <input type="hidden" name="return_to" value="{{ url_for('auctions.auctions_overview') }}">
                     <input type="hidden" name="auction_id" value="{{ auction.id }}">
                     <select name="status" aria-label="Auction status">

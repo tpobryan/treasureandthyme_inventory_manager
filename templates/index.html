@@ -470,6 +470,7 @@
           <div class="button-row" style="margin-top: 0;">
             <a class="button-link" href="{{ url_for('main.resume_draft') }}">Resume Last Draft</a>
             <form action="{{ url_for('main.discard_draft') }}" method="post">
+              {{ csrf_input() }}
               <button type="submit" class="secondary">Discard Draft</button>
             </form>
           </div>
@@ -499,6 +500,7 @@
           </div>
           <div class="auction-actions">
             <form action="{{ url_for('auctions.switch_auction_route') }}" method="post">
+              {{ csrf_input() }}
               <input type="hidden" name="return_to" value="{{ url_for('main.index') }}">
               <select name="auction_id" aria-label="Switch auction">
                 {% for auction in auction_list %}
@@ -508,6 +510,7 @@
               <button type="submit" class="secondary">Switch Auction</button>
             </form>
             <form action="{{ url_for('auctions.update_auction_status_route') }}" method="post">
+              {{ csrf_input() }}
               <input type="hidden" name="return_to" value="{{ url_for('main.index') }}">
               <input type="hidden" name="auction_id" value="{{ current_auction.id }}">
               <select name="status" aria-label="Auction status">
@@ -518,6 +521,7 @@
               <button type="submit" class="secondary">Update Status</button>
             </form>
             <form action="{{ url_for('auctions.create_auction_route') }}" method="post">
+              {{ csrf_input() }}
               <input type="hidden" name="return_to" value="{{ url_for('main.index') }}">
               <button type="submit" class="secondary">Create Next Auction</button>
             </form>
@@ -528,12 +532,14 @@
       <div style="margin-bottom: 16px;">
         <div class="lot-preview" style="margin-bottom: 0;">Next lot number: {{ next_lot }}</div>
         <form action="{{ url_for('main.set_next_lot') }}" method="post" style="display: inline-flex; gap: 8px; align-items: center; margin-left: 12px; vertical-align: top;">
+          {{ csrf_input() }}
           <input type="number" name="next_lot" placeholder="Override lot..." required style="width: 150px; padding: 8px 12px; margin: 0;">
           <button type="submit" class="secondary" style="padding: 8px 14px;">Update</button>
         </form>
       </div>
 
       <form id="analyzeForm" action="{{ url_for('main.analyze') }}" method="post" enctype="multipart/form-data">
+        {{ csrf_input() }}
         <div class="field">
           <label for="photoInput">Add Photos</label>
           <input
@@ -583,6 +589,7 @@
           <a class="button-link secondary" href="{{ url_for('admin.admin') }}">Admin</a>
           {% if auth_enabled and is_authenticated %}
             <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">
+              {{ csrf_input() }}
               <button type="submit" class="secondary">Sign Out</button>
             </form>
           {% endif %}
