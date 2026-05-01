@@ -1,4 +1,7 @@
+import base64
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
+from werkzeug.utils import secure_filename
+from image_processor import apply_auto_enhance
 
 from database import (
     ITEM_STATUS_READY,
@@ -186,3 +189,42 @@ def bulk_update_items():
         flash("Choose a valid bulk action.")
         
     return redirect(url_for("items.manage_items", status=current_filter))
+
+@items_bp.route("/api/edit_saved_photo", methods=["POST"])
+def edit_saved_photo():
+    lot_number = request.form.get("lot_number", "").strip()
+    filename = secure_filename(request.form.get("filename", "").strip())
+    auto_enhance = request.form.get("auto_enhance") == "true"
+    image_data = request.form.get("image_data", "").strip()
+    
+    if not lot_number.isdigit():
+        return {"success": False, "error": "Invalid lot number"}, 400
+        
+    item = fetch_saved_item(int(lot_number))
+    if not item:
+        return {"success": False, "error": "Lot not found"}, 404
+        
+    image_folder = item.get("image_folder", "")
+    if not image_folder:
+        return {"success": False, "error": "No image folder found for this lot"}, 404
+        
+    target_dir = UPLOADS_DIR / image_folder
+    target = target_dir / filename
+    if not filename or not target.exists() or not target.is_file():
+        return {"success": False, "error": "File not found"}, 404
+
+    if not image_data.startswith("data:image/"):
+        return {"success": False, "error": "Invalid image data"}, 400
+
+    try:
+        header, encoded = image_data.split(",", 1)
+        data = base64.b64decode(encoded)
+        target.write_bytes(data)
+        
+        if auto_enhance:
+            apply_auto_enhance(target, target)
+            
+        return {"success": True}
+    except Exception as exc:
+        current_app.logger.exception("Failed to edit photo")
+        return {"success": False, "error": str(exc)}, 500

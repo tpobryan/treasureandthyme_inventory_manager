@@ -1445,3 +1445,86 @@ def test_bulk_move_items_to_another_auction(test_env, tmp_path, monkeypatch):
         (2120, 5, "ready", "", None),
         (2121, 5, "ready", "", None),
     ]
+def test_edit_draft_photo(test_env):
+    draft_dir = test_env["uploads_dir"] / "draft123"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "photo.jpg").write_bytes(b"old image")
+
+    b64_data = "ZGF0YQ==" # "data"
+    
+    response = test_env["client"].post(
+        "/api/edit_draft_photo",
+        data={
+            "temp_id": "draft123",
+            "filename": "photo.jpg",
+            "image_data": f"data:image/jpeg;base64,{b64_data}",
+            "auto_enhance": "false"
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.json["success"] is True
+    assert (draft_dir / "photo.jpg").read_bytes() == b"data"
+
+def test_edit_saved_photo(test_env, tmp_path, monkeypatch):
+    db_path = tmp_path / "auction_items.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    db_module.append_item_record(
+        {
+            "lot_number": "3000",
+            "title": "Vase",
+            "description": "",
+            "condition_notes": "",
+            "low_estimate": "",
+            "high_estimate": "",
+            "dimensions_length": "",
+            "dimensions_depth": "",
+            "dimensions_height": "",
+            "tags": "",
+            "reference_number": "",
+            "item_notes": "",
+            "consigner_number": "",
+            "shipping_available": "No",
+            "category": "Other",
+            "status": "ready",
+            "image_folder": "3000_vase",
+            "last_export_batch": "",
+            "published_at": "",
+        }
+    )
+    
+    target_dir = test_env["uploads_dir"] / "3000_vase"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / "photo.jpg").write_bytes(b"old image")
+
+    b64_data = "ZGF0YQ==" # "data"
+    
+    response = test_env["client"].post(
+        "/api/edit_saved_photo",
+        data={
+            "lot_number": "3000",
+            "filename": "photo.jpg",
+            "image_data": f"data:image/jpeg;base64,{b64_data}",
+            "auto_enhance": "false"
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.json["success"] is True
+    assert (target_dir / "photo.jpg").read_bytes() == b"data"
+
+def test_auto_enhance_preview(test_env):
+    b64_data = "ZGF0YQ==" # "data"
+    
+    response = test_env["client"].post(
+        "/api/auto_enhance_preview",
+        data={
+            "image_data": f"data:image/jpeg;base64,{b64_data}",
+            "csrf_token": ""  # WTF_CSRF_ENABLED is False in test_env
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.json["success"] is True
+    assert response.json["image_data"].startswith("data:image/jpeg;base64,")

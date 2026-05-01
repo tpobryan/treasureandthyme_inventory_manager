@@ -1,9 +1,13 @@
 import re
 import shutil
 import uuid
+import base64
+import tempfile
 from pathlib import Path
 from flask import Blueprint, render_template, request, flash, redirect, url_for, send_from_directory, current_app, session
 from werkzeug.utils import secure_filename
+
+from image_processor import apply_auto_enhance
 
 from auctionninja_generator import AuctionNinjaGenerator
 from ftp_client import upload_lot_photos_to_auctionninja
@@ -503,3 +507,62 @@ def recover_draft(temp_id: str):
     session["active_temp_id"] = temp_id
     flash("Draft recovered successfully!")
     return redirect(url_for("main.resume_draft"))
+
+@main_bp.route("/api/edit_draft_photo", methods=["POST"])
+def edit_draft_photo():
+    temp_id = request.form.get("temp_id", "").strip()
+    filename = secure_filename(request.form.get("filename", "").strip())
+    auto_enhance = request.form.get("auto_enhance") == "true"
+    image_data = request.form.get("image_data", "").strip()
+    
+    temp_dir = UPLOADS_DIR / temp_id
+    if not temp_id or not temp_dir.exists():
+        return {"success": False, "error": "Draft not found"}, 404
+
+    target = temp_dir / filename
+    if not filename or not target.exists() or not target.is_file():
+        return {"success": False, "error": "File not found"}, 404
+
+    if not image_data.startswith("data:image/"):
+        return {"success": False, "error": "Invalid image data"}, 400
+
+    try:
+        header, encoded = image_data.split(",", 1)
+        data = base64.b64decode(encoded)
+        target.write_bytes(data)
+        
+        if auto_enhance:
+            apply_auto_enhance(target, target)
+            
+        return {"success": True}
+    except Exception as exc:
+        current_app.logger.exception("Failed to edit photo")
+        return {"success": False, "error": str(exc)}, 500
+
+@main_bp.route("/api/auto_enhance_preview", methods=["POST"])
+def auto_enhance_preview():
+    image_data = request.form.get("image_data", "").strip()
+    
+    if not image_data.startswith("data:image/"):
+        return {"success": False, "error": "Invalid image data"}, 400
+
+    try:
+        header, encoded = image_data.split(",", 1)
+        data = base64.b64decode(encoded)
+        
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+            tf.write(data)
+            temp_path = Path(tf.name)
+            
+        try:
+            apply_auto_enhance(temp_path, temp_path)
+            enhanced_bytes = temp_path.read_bytes()
+            enhanced_b64 = base64.b64encode(enhanced_bytes).decode("utf-8")
+            return {"success": True, "image_data": f"data:image/jpeg;base64,{enhanced_b64}"}
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+                
+    except Exception as exc:
+        current_app.logger.exception("Failed to auto enhance preview")
+        return {"success": False, "error": str(exc)}, 500

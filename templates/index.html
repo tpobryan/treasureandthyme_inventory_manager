@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AuctionNinja Listing Generator</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
   <style>
     :root {
       --bg: #f6f7fb;
@@ -412,6 +413,11 @@
       }
     }
 
+    .file-actions {
+      display: flex;
+      gap: 8px;
+    }
+
     @media (max-width: 640px) {
       .wrap {
         padding: 12px;
@@ -434,14 +440,26 @@
         flex-direction: column;
       }
 
-      .remove-btn {
+      .file-actions {
         width: 100%;
       }
 
-        .danger-row {
+      .file-actions button {
+        flex: 1;
+      }
+
+      .danger-row {
         grid-template-columns: 1fr;
       }
     }
+
+    .editor-modal {
+      position: fixed; inset: 0; z-index: 100; display: none; background: rgba(0,0,0,0.85); flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+    }
+    .editor-modal.active { display: flex; }
+    .editor-container { max-width: 100%; max-height: 70vh; margin-bottom: 20px; }
+    .editor-container img { max-width: 100%; max-height: 70vh; display: block; }
+    .editor-toolbar { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; background: #fff; padding: 15px; border-radius: 12px; }
   </style>
 </head>
 <body>
@@ -602,6 +620,20 @@
     </div>
   </div>
 
+  <div id="editorModal" class="editor-modal">
+    <div class="editor-container">
+      <img id="editorImage" src="">
+    </div>
+    <div class="editor-toolbar">
+      <button type="button" id="btnRotateLeft" class="secondary">Rotate Left</button>
+      <button type="button" id="btnRotateRight" class="secondary">Rotate Right</button>
+      <button type="button" id="btnCancelEdit" class="secondary">Cancel</button>
+      <button type="button" id="btnSaveEdit">Save Crop</button>
+      <button type="button" id="btnAutoEnhance" style="background: #10b981;">✨ Auto Enhance & Save</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <script>
     const analyzeForm = document.getElementById("analyzeForm");
     const photoInput = document.getElementById("photoInput");
@@ -685,6 +717,19 @@
         name.className = "file-name";
         name.textContent = `${index + 1}. ${file.name}`;
 
+        const actions = document.createElement("div");
+        actions.className = "file-actions";
+
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "remove-btn";
+        edit.style.background = "#e5e7eb";
+        edit.style.color = "#111827";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => {
+          openEditor(index);
+        });
+
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = "remove-btn";
@@ -698,7 +743,9 @@
         main.appendChild(thumb);
         main.appendChild(name);
         row.appendChild(main);
-        row.appendChild(remove);
+        actions.appendChild(edit);
+        actions.appendChild(remove);
+        row.appendChild(actions);
         fileList.appendChild(row);
       });
     }
@@ -790,6 +837,11 @@
       const sellerNotes = sellerNotesInput.value || "";
       formData.append("seller_notes", sellerNotes);
 
+      const csrfInput = analyzeForm.querySelector('input[name="csrf_token"]');
+      if (csrfInput) {
+        formData.append("csrf_token", csrfInput.value);
+      }
+
       try {
         const response = await fetch(analyzeForm.action, {
           method: "POST",
@@ -800,21 +852,113 @@
         document.open();
         document.write(html);
         document.close();
-      } catch (error) {
-        isSubmitting = false;
-        analyzeForm.classList.remove("is-loading");
+      } catch (err) {
+        alert("Upload error.");
+        stopLoadingState();
         loadingOverlay.classList.remove("active");
         loadingOverlay.setAttribute("aria-hidden", "true");
-        stopLoadingState();
+        analyzeForm.classList.remove("is-loading");
         analyzeButton.textContent = "Analyze";
         analyzeButton.disabled = false;
         addMoreButton.disabled = false;
         clearPhotosButton.disabled = false;
         photoInput.disabled = false;
         sellerNotesInput.disabled = false;
-        alert("Analysis failed to start. Please try again.");
+        isSubmitting = false;
       }
     });
+
+    let cropper = null;
+    let editingIndex = -1;
+    const editorModal = document.getElementById("editorModal");
+    const editorImage = document.getElementById("editorImage");
+
+    function openEditor(index) {
+      editingIndex = index;
+      const file = selectedFiles[index];
+      editorImage.src = getPreviewUrl(file);
+      editorModal.classList.add("active");
+      if (cropper) cropper.destroy();
+      cropper = new Cropper(editorImage, { viewMode: 2 });
+    }
+
+    function closeEditor() {
+      editorModal.classList.remove("active");
+      if (cropper) cropper.destroy();
+      cropper = null;
+      editingIndex = -1;
+    }
+
+    document.getElementById("btnCancelEdit").addEventListener("click", closeEditor);
+    document.getElementById("btnRotateLeft").addEventListener("click", () => cropper && cropper.rotate(-90));
+    document.getElementById("btnRotateRight").addEventListener("click", () => cropper && cropper.rotate(90));
+
+    function saveEditedPhoto(autoEnhance) {
+      if (!cropper || editingIndex < 0) return;
+      
+      const btnSaveEdit = document.getElementById("btnSaveEdit");
+      const btnAutoEnhance = document.getElementById("btnAutoEnhance");
+      
+      const canvas = cropper.getCroppedCanvas({ maxWidth: 1800, maxHeight: 1800 });
+      if (!canvas) return;
+      
+      const originalFile = selectedFiles[editingIndex];
+      
+      btnSaveEdit.disabled = true;
+      btnAutoEnhance.disabled = true;
+
+      if (!autoEnhance) {
+        canvas.toBlob((blob) => {
+          const newFile = new File([blob], originalFile.name, { type: "image/jpeg" });
+          selectedFiles[editingIndex] = newFile;
+          releasePreviewUrl(originalFile);
+          renderSelectedFiles();
+          closeEditor();
+          btnSaveEdit.disabled = false;
+          btnAutoEnhance.disabled = false;
+        }, "image/jpeg", 0.85);
+      } else {
+        btnAutoEnhance.textContent = "Enhancing...";
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const formData = new FormData();
+        formData.append("image_data", dataUrl);
+        const csrfInput = document.querySelector('input[name="csrf_token"]');
+        if (csrfInput) formData.append("csrf_token", csrfInput.value);
+
+        fetch("/api/auto_enhance_preview", {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin"
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            fetch(data.image_data)
+              .then(res => res.blob())
+              .then(blob => {
+                 const newFile = new File([blob], originalFile.name, { type: "image/jpeg" });
+                 selectedFiles[editingIndex] = newFile;
+                 releasePreviewUrl(originalFile);
+                 renderSelectedFiles();
+                 closeEditor();
+              });
+          } else {
+            alert("Error enhancing photo: " + data.error);
+          }
+        })
+        .catch(err => {
+          alert("Network error during enhancement.");
+        })
+        .finally(() => {
+          btnSaveEdit.disabled = false;
+          btnAutoEnhance.disabled = false;
+          btnAutoEnhance.textContent = "✨ Auto Enhance & Save";
+        });
+      }
+    }
+
+    document.getElementById("btnSaveEdit").addEventListener("click", () => saveEditedPhoto(false));
+    document.getElementById("btnAutoEnhance").addEventListener("click", () => saveEditedPhoto(true));
 
     renderSelectedFiles();
     setLoadingStep(0);
