@@ -13,6 +13,12 @@ import routes.main as main_module
 import routes.admin as admin_module
 
 
+def fetch_csrf_token(client, path="/login"):
+    client.get(path)
+    with client.session_transaction() as sess:
+        return sess["csrf_token"]
+
+
 @pytest.fixture
 def test_env(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
@@ -39,6 +45,7 @@ def test_env(tmp_path, monkeypatch):
     exports_module.EXPORTS_DIR = exports_dir
     db_module._DB_INITIALIZED = False
     app_module.app.config["TESTING"] = True
+    app_module.app.config["WTF_CSRF_ENABLED"] = False
     monkeypatch.setenv("DATABASE_URL", "")
     monkeypatch.setenv("AUCTION_NUMBER", "")
     monkeypatch.setenv("FTP_HOST", "")
@@ -106,24 +113,62 @@ def test_login_redirects_when_auth_is_enabled(test_env, monkeypatch):
 
 
 def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch):
+    app_module.app.config["WTF_CSRF_ENABLED"] = True
     monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
     monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    csrf_token = fetch_csrf_token(test_env["client"])
 
     bad_login = test_env["client"].post(
         "/login",
-        data={"username": "owner", "password": "wrong", "next": "/"},
+        data={"username": "owner", "password": "wrong", "next": "/", "csrf_token": csrf_token},
         follow_redirects=True,
     )
     assert b"Login failed" in bad_login.data
 
+    csrf_token = fetch_csrf_token(test_env["client"])
     good_login = test_env["client"].post(
         "/login",
-        data={"username": "owner", "password": "secret", "next": "/"},
+        data={"username": "owner", "password": "secret", "next": "/", "csrf_token": csrf_token},
         follow_redirects=True,
     )
     assert good_login.status_code == 200
     assert b"Signed in." in good_login.data
     assert b"AuctionNinja Listing Generator" in good_login.data
+
+
+def test_login_rejects_missing_csrf_token_when_auth_is_enabled(test_env, monkeypatch):
+    app_module.app.config["WTF_CSRF_ENABLED"] = True
+    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+
+    response = test_env["client"].post(
+        "/login",
+        data={"username": "owner", "password": "secret", "next": "/"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+
+
+def test_login_rejects_external_redirect_target(test_env, monkeypatch):
+    app_module.app.config["WTF_CSRF_ENABLED"] = True
+    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    csrf_token = fetch_csrf_token(test_env["client"])
+
+    response = test_env["client"].post(
+        "/login",
+        data={
+            "username": "owner",
+            "password": "secret",
+            "next": "https://example.com/phish",
+            "csrf_token": csrf_token,
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
 
 
 def test_healthz_stays_available_when_auth_is_enabled(test_env, monkeypatch):
@@ -268,10 +313,12 @@ def test_index_shows_resume_panel_for_active_draft(test_env):
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
+        owner_token="owner-a",
     )
 
     with test_env["client"].session_transaction() as sess:
         sess["active_temp_id"] = "draft123"
+        sess["draft_owner_token"] = "owner-a"
 
     response = test_env["client"].get("/")
 
@@ -290,10 +337,12 @@ def test_discard_draft_removes_folder_and_state(test_env):
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
+        owner_token="owner-a",
     )
 
     with test_env["client"].session_transaction() as sess:
         sess["active_temp_id"] = "draft123"
+        sess["draft_owner_token"] = "owner-a"
 
     response = test_env["client"].post("/discard_draft", follow_redirects=True)
 
@@ -315,10 +364,12 @@ def test_reorder_draft_photos(test_env):
         seller_notes="",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
+        owner_token="owner-a",
     )
 
     with test_env["client"].session_transaction() as sess:
         sess["active_temp_id"] = "draft123"
+        sess["draft_owner_token"] = "owner-a"
 
     response = test_env["client"].post(
         "/reorder_draft_photos",
@@ -347,9 +398,10 @@ def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
         seller_notes="Seller note",
         options=[{"rank": 1, "title": "Draft title"}],
         form={"Title": "Draft title"},
+        owner_token="owner-a",
     )
 
-    active = db_module.fetch_active_draft("draftdb")
+    active = db_module.fetch_active_draft("draftdb", owner_token="owner-a")
 
     assert active is not None
     assert active["temp_id"] == "draftdb"
@@ -357,7 +409,29 @@ def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
 
     db_module.clear_active_draft(temp_id="draftdb")
 
-    assert db_module.fetch_active_draft("draftdb") is None
+    assert db_module.fetch_active_draft("draftdb", owner_token="owner-a") is None
+
+
+def test_recover_draft_is_blocked_for_other_owner_session(test_env):
+    draft_dir = test_env["uploads_dir"] / "draft123"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    (draft_dir / "photo.jpg").write_bytes(b"fake image")
+
+    db_module.set_active_draft(
+        temp_id="draft123",
+        seller_notes="Seller note",
+        options=[{"rank": 1, "title": "Draft title"}],
+        form={"Title": "Draft title"},
+        owner_token="owner-a",
+    )
+
+    with test_env["client"].session_transaction() as sess:
+        sess["draft_owner_token"] = "owner-b"
+
+    response = test_env["client"].post("/recover_draft/draft123", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"That draft is not available in this browser session." in response.data
 
 
 def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):

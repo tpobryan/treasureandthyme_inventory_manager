@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
-from utils import auth_enabled, auth_username, auth_password, is_authenticated
+from utils import auth_enabled, auth_username, auth_password, is_authenticated, is_safe_local_url
+from extensions import limiter
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -23,6 +24,7 @@ def require_login_when_configured():
     return redirect(url_for("auth.login", next=request.path))
 
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
 def login():
     if not auth_enabled():
         return redirect(url_for("main.index"))
@@ -34,7 +36,7 @@ def login():
         if username == auth_username() and password == auth_password():
             session["authenticated"] = True
             flash("Signed in.")
-            return redirect(next_url or url_for("main.index"))
+            return redirect(next_url if is_safe_local_url(next_url) else url_for("main.index"))
         flash("Login failed. Check the username and password.")
 
     next_url = request.values.get("next", "").strip()
