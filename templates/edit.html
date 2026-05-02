@@ -511,19 +511,46 @@
 
               <div class="field">
                 <label for="editPhotoInput">Add More Photos</label>
+                <button type="button" id="btnSelectMorePhotos" style="margin-bottom: 12px; width: 100%;">📸 Select Photos...</button>
                 <input
                   id="editPhotoInput"
                   type="file"
                   name="photos"
                   accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/*"
                   multiple
+                  style="display: none;"
                 >
+                <div id="selectedPhotosCount" style="font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; display: none;"></div>
               </div>
 
               <div class="button-row" style="margin-top: 0;">
-                <button type="submit" class="small-button">Add Photos To Draft</button>
+                <button type="submit" class="secondary" style="width: 100%;">Upload Selected Photos To Draft</button>
               </div>
             </form>
+            
+            <script>
+              document.addEventListener('DOMContentLoaded', function() {
+                const btnSelectMorePhotos = document.getElementById('btnSelectMorePhotos');
+                const editPhotoInput = document.getElementById('editPhotoInput');
+                const selectedPhotosCount = document.getElementById('selectedPhotosCount');
+
+                btnSelectMorePhotos.addEventListener('click', function() {
+                  editPhotoInput.click();
+                });
+
+                editPhotoInput.addEventListener('change', function() {
+                  const count = this.files.length;
+                  if (count > 0) {
+                    selectedPhotosCount.textContent = count + " photo(s) selected ready to upload.";
+                    selectedPhotosCount.style.display = "block";
+                    btnSelectMorePhotos.textContent = "📸 Select Different Photos...";
+                  } else {
+                    selectedPhotosCount.style.display = "none";
+                    btnSelectMorePhotos.textContent = "📸 Select Photos...";
+                  }
+                });
+              });
+            </script>
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
