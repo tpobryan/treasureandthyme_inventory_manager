@@ -1514,8 +1514,15 @@ def test_edit_saved_photo(test_env, tmp_path, monkeypatch):
     assert response.json["success"] is True
     assert (target_dir / "photo.jpg").read_bytes() == b"data"
 
-def test_auto_enhance_preview(test_env):
+def test_auto_enhance_preview(test_env, monkeypatch):
     b64_data = "ZGF0YQ==" # "data"
+    
+    # Mock the enhancement function to just write some valid bytes back
+    def mock_enhance(source, target):
+        with open(target, "wb") as f:
+            f.write(b"enhanced")
+    
+    monkeypatch.setattr("routes.main.apply_auto_enhance", mock_enhance)
     
     response = test_env["client"].post(
         "/api/auto_enhance_preview",

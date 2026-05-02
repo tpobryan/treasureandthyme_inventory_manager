@@ -443,7 +443,9 @@
     .editor-modal.active { display: flex; }
     .editor-container { max-width: 100%; max-height: 60vh; margin-bottom: 20px; }
     .editor-container img { max-width: 100%; max-height: 60vh; display: block; }
-    .editor-toolbar { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; background: #fff; padding: 15px; border-radius: 12px; }
+    .editor-toolbar-grid { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; width: 100%; max-width: 400px; background: #fff; padding: 12px; border-radius: 12px; }
+    .editor-toolbar-grid button { padding: 10px 4px; }
+    #btnCancelEdit, #btnSaveEdit { grid-column: span 1.5; }
   </style>
 </head>
 <body>
@@ -920,12 +922,12 @@
     <div class="editor-container">
       <img id="editorImage" src="">
     </div>
-    <div class="editor-toolbar">
-      <button type="button" id="btnRotateLeft" class="secondary">Rotate Left</button>
-      <button type="button" id="btnRotateRight" class="secondary">Rotate Right</button>
+    <div class="editor-toolbar-grid">
+      <button type="button" id="btnRotateLeft" class="secondary" title="Rotate Left">↺</button>
+      <button type="button" id="btnRotateRight" class="secondary" title="Rotate Right">↻</button>
+      <button type="button" id="btnToggleEnhance" class="secondary">✨ Enhance</button>
       <button type="button" id="btnCancelEdit" class="secondary">Cancel</button>
-      <button type="button" id="btnSaveEdit">Save Crop</button>
-      <button type="button" id="btnAutoEnhance" style="background: #10b981;">✨ Auto Enhance & Save</button>
+      <button type="button" id="btnSaveEdit">Save</button>
     </div>
   </div>
 
@@ -933,13 +935,25 @@
   <script>
     let cropper = null;
     let editingFilename = "";
+    let isEnhanced = false;
+    let enhancedImageUrl = null;
+    let originalImageUrl = null;
     const editorModal = document.getElementById("editorModal");
     const editorImage = document.getElementById("editorImage");
 
     document.querySelectorAll(".edit-photo-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         editingFilename = btn.getAttribute("data-filename");
-        editorImage.src = btn.getAttribute("data-src") + "?t=" + new Date().getTime();
+        isEnhanced = false;
+        enhancedImageUrl = null;
+        originalImageUrl = btn.getAttribute("data-src") + "?t=" + new Date().getTime();
+        
+        const btnToggleEnhance = document.getElementById("btnToggleEnhance");
+        btnToggleEnhance.style.background = "";
+        btnToggleEnhance.style.color = "";
+        btnToggleEnhance.textContent = "✨ Enhance";
+        
+        editorImage.src = originalImageUrl;
         editorModal.classList.add("active");
         if (cropper) cropper.destroy();
         cropper = new Cropper(editorImage, { viewMode: 2 });
@@ -949,6 +963,11 @@
     document.getElementById("btnCancelEdit").addEventListener("click", () => {
       editorModal.classList.remove("active");
       if (cropper) cropper.destroy();
+      cropper = null;
+      if (enhancedImageUrl) {
+        URL.revokeObjectURL(enhancedImageUrl);
+        enhancedImageUrl = null;
+      }
     });
 
     document.getElementById("btnRotateLeft").addEventListener("click", () => {
@@ -959,7 +978,85 @@
       if (cropper) cropper.rotate(90);
     });
 
-    function saveEditedPhoto(autoEnhance) {
+    document.getElementById("btnToggleEnhance").addEventListener("click", () => {
+      if (!cropper) return;
+      const btnToggleEnhance = document.getElementById("btnToggleEnhance");
+      
+      if (isEnhanced) {
+        isEnhanced = false;
+        const cropData = cropper.getData();
+        cropper.replace(originalImageUrl);
+        cropper.options.ready = () => cropper.setData(cropData);
+        btnToggleEnhance.style.background = "";
+        btnToggleEnhance.style.color = "";
+        btnToggleEnhance.textContent = "✨ Enhance";
+      } else {
+        if (enhancedImageUrl) {
+          isEnhanced = true;
+          const cropData = cropper.getData();
+          cropper.replace(enhancedImageUrl);
+          cropper.options.ready = () => cropper.setData(cropData);
+          btnToggleEnhance.style.background = "#10b981";
+          btnToggleEnhance.style.color = "white";
+        } else {
+          btnToggleEnhance.textContent = "Loading...";
+          btnToggleEnhance.disabled = true;
+          
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let w = img.naturalWidth;
+            let h = img.naturalHeight;
+            if (Math.max(w, h) > 1800) {
+               const scale = 1800 / Math.max(w, h);
+               w *= scale;
+               h *= scale;
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+            
+            const formData = new FormData();
+            formData.append("image_data", dataUrl);
+            const csrfInput = document.querySelector('input[name="csrf_token"]');
+            if (csrfInput) formData.append("csrf_token", csrfInput.value);
+
+            fetch("/api/auto_enhance_preview", {
+              method: "POST", body: formData, credentials: "same-origin"
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                fetch(data.image_data)
+                  .then(res => res.blob())
+                  .then(blob => {
+                     enhancedImageUrl = URL.createObjectURL(blob);
+                     isEnhanced = true;
+                     const cropData = cropper.getData();
+                     cropper.replace(enhancedImageUrl);
+                     cropper.options.ready = () => cropper.setData(cropData);
+                     btnToggleEnhance.style.background = "#10b981";
+                     btnToggleEnhance.style.color = "white";
+                  });
+              } else {
+                alert("Error enhancing photo: " + data.error);
+              }
+            })
+            .catch(err => alert("Network error during enhancement."))
+            .finally(() => {
+              btnToggleEnhance.disabled = false;
+              btnToggleEnhance.textContent = "✨ Enhance";
+            });
+          };
+          img.src = originalImageUrl;
+        }
+      }
+    });
+
+    document.getElementById("btnSaveEdit").addEventListener("click", () => {
       if (!cropper) return;
       const canvas = cropper.getCroppedCanvas({
         maxWidth: 1800,
@@ -972,11 +1069,11 @@
       formData.append("temp_id", document.querySelector('input[name="temp_id"]').value);
       formData.append("filename", editingFilename);
       formData.append("image_data", dataUrl);
-      formData.append("auto_enhance", autoEnhance ? "true" : "false");
+      formData.append("auto_enhance", "false"); // We no longer need the backend to apply it, it's baked into the canvas
       formData.append("csrf_token", document.querySelector('input[name="csrf_token"]').value);
 
       document.getElementById("btnSaveEdit").disabled = true;
-      document.getElementById("btnAutoEnhance").disabled = true;
+      document.getElementById("btnToggleEnhance").disabled = true;
       document.getElementById("btnSaveEdit").textContent = "Saving...";
 
       fetch("{{ url_for('main.edit_draft_photo') }}", {
@@ -991,20 +1088,17 @@
         } else {
           alert("Error saving photo: " + data.error);
           document.getElementById("btnSaveEdit").disabled = false;
-          document.getElementById("btnAutoEnhance").disabled = false;
-          document.getElementById("btnSaveEdit").textContent = "Save Crop";
+          document.getElementById("btnToggleEnhance").disabled = false;
+          document.getElementById("btnSaveEdit").textContent = "Save";
         }
       })
       .catch(err => {
         alert("Network error.");
         document.getElementById("btnSaveEdit").disabled = false;
-        document.getElementById("btnAutoEnhance").disabled = false;
-        document.getElementById("btnSaveEdit").textContent = "Save Crop";
+        document.getElementById("btnToggleEnhance").disabled = false;
+        document.getElementById("btnSaveEdit").textContent = "Save";
       });
-    }
-
-    document.getElementById("btnSaveEdit").addEventListener("click", () => saveEditedPhoto(false));
-    document.getElementById("btnAutoEnhance").addEventListener("click", () => saveEditedPhoto(true));
+    });
   </script>
 </body>
 </html>

@@ -459,7 +459,9 @@
     .editor-modal.active { display: flex; }
     .editor-container { max-width: 100%; max-height: 60vh; margin-bottom: 20px; }
     .editor-container img { max-width: 100%; max-height: 60vh; display: block; }
-    .editor-toolbar { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; background: #fff; padding: 15px; border-radius: 12px; }
+    .editor-toolbar-grid { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; width: 100%; max-width: 400px; background: #fff; padding: 12px; border-radius: 12px; }
+    .editor-toolbar-grid button { padding: 10px 4px; }
+    #btnCancelEdit, #btnSaveEdit { grid-column: span 1.5; }
   </style>
 </head>
 <body>
@@ -624,12 +626,12 @@
     <div class="editor-container">
       <img id="editorImage" src="">
     </div>
-    <div class="editor-toolbar">
-      <button type="button" id="btnRotateLeft" class="secondary">Rotate Left</button>
-      <button type="button" id="btnRotateRight" class="secondary">Rotate Right</button>
+    <div class="editor-toolbar-grid">
+      <button type="button" id="btnRotateLeft" class="secondary" title="Rotate Left">↺</button>
+      <button type="button" id="btnRotateRight" class="secondary" title="Rotate Right">↻</button>
+      <button type="button" id="btnToggleEnhance" class="secondary">✨ Enhance</button>
       <button type="button" id="btnCancelEdit" class="secondary">Cancel</button>
-      <button type="button" id="btnSaveEdit">Save Crop</button>
-      <button type="button" id="btnAutoEnhance" style="background: #10b981;">✨ Auto Enhance & Save</button>
+      <button type="button" id="btnSaveEdit">Save</button>
     </div>
   </div>
 
@@ -870,13 +872,23 @@
 
     let cropper = null;
     let editingIndex = -1;
+    let isEnhanced = false;
+    let enhancedImageUrl = null;
+    let originalImageUrl = null;
     const editorModal = document.getElementById("editorModal");
     const editorImage = document.getElementById("editorImage");
 
     function openEditor(index) {
       editingIndex = index;
-      const file = selectedFiles[index];
-      editorImage.src = getPreviewUrl(file);
+      isEnhanced = false;
+      enhancedImageUrl = null;
+      originalImageUrl = getPreviewUrl(selectedFiles[index]);
+      
+      const btnToggleEnhance = document.getElementById("btnToggleEnhance");
+      btnToggleEnhance.style.background = "";
+      btnToggleEnhance.style.color = "";
+      
+      editorImage.src = originalImageUrl;
       editorModal.classList.add("active");
       if (cropper) cropper.destroy();
       cropper = new Cropper(editorImage, { viewMode: 2 });
@@ -887,78 +899,116 @@
       if (cropper) cropper.destroy();
       cropper = null;
       editingIndex = -1;
+      if (enhancedImageUrl) {
+        URL.revokeObjectURL(enhancedImageUrl);
+        enhancedImageUrl = null;
+      }
     }
 
     document.getElementById("btnCancelEdit").addEventListener("click", closeEditor);
     document.getElementById("btnRotateLeft").addEventListener("click", () => cropper && cropper.rotate(-90));
     document.getElementById("btnRotateRight").addEventListener("click", () => cropper && cropper.rotate(90));
 
-    function saveEditedPhoto(autoEnhance) {
+    document.getElementById("btnToggleEnhance").addEventListener("click", () => {
+      if (!cropper) return;
+      const btnToggleEnhance = document.getElementById("btnToggleEnhance");
+      
+      if (isEnhanced) {
+        isEnhanced = false;
+        const cropData = cropper.getData();
+        cropper.replace(originalImageUrl);
+        cropper.options.ready = () => cropper.setData(cropData);
+        btnToggleEnhance.style.background = "";
+        btnToggleEnhance.style.color = "";
+        btnToggleEnhance.textContent = "✨ Enhance";
+      } else {
+        if (enhancedImageUrl) {
+          isEnhanced = true;
+          const cropData = cropper.getData();
+          cropper.replace(enhancedImageUrl);
+          cropper.options.ready = () => cropper.setData(cropData);
+          btnToggleEnhance.style.background = "#10b981";
+          btnToggleEnhance.style.color = "white";
+        } else {
+          btnToggleEnhance.textContent = "Loading...";
+          btnToggleEnhance.disabled = true;
+          
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let w = img.naturalWidth;
+            let h = img.naturalHeight;
+            if (Math.max(w, h) > 1800) {
+               const scale = 1800 / Math.max(w, h);
+               w *= scale;
+               h *= scale;
+            }
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+            
+            const formData = new FormData();
+            formData.append("image_data", dataUrl);
+            const csrfInput = document.querySelector('input[name="csrf_token"]');
+            if (csrfInput) formData.append("csrf_token", csrfInput.value);
+
+            fetch("/api/auto_enhance_preview", {
+              method: "POST", body: formData, credentials: "same-origin"
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                fetch(data.image_data)
+                  .then(res => res.blob())
+                  .then(blob => {
+                     enhancedImageUrl = URL.createObjectURL(blob);
+                     isEnhanced = true;
+                     const cropData = cropper.getData();
+                     cropper.replace(enhancedImageUrl);
+                     cropper.options.ready = () => cropper.setData(cropData);
+                     btnToggleEnhance.style.background = "#10b981";
+                     btnToggleEnhance.style.color = "white";
+                  });
+              } else {
+                alert("Error enhancing photo: " + data.error);
+              }
+            })
+            .catch(err => alert("Network error during enhancement."))
+            .finally(() => {
+              btnToggleEnhance.disabled = false;
+              btnToggleEnhance.textContent = "✨ Enhance";
+            });
+          };
+          img.src = originalImageUrl;
+        }
+      }
+    });
+
+    document.getElementById("btnSaveEdit").addEventListener("click", () => {
       if (!cropper || editingIndex < 0) return;
       
       const btnSaveEdit = document.getElementById("btnSaveEdit");
-      const btnAutoEnhance = document.getElementById("btnAutoEnhance");
+      const btnToggleEnhance = document.getElementById("btnToggleEnhance");
       
       const canvas = cropper.getCroppedCanvas({ maxWidth: 1800, maxHeight: 1800 });
       if (!canvas) return;
       
       const originalFile = selectedFiles[editingIndex];
-      
       btnSaveEdit.disabled = true;
-      btnAutoEnhance.disabled = true;
+      btnToggleEnhance.disabled = true;
 
-      if (!autoEnhance) {
-        canvas.toBlob((blob) => {
-          const newFile = new File([blob], originalFile.name, { type: "image/jpeg" });
-          selectedFiles[editingIndex] = newFile;
-          releasePreviewUrl(originalFile);
-          renderSelectedFiles();
-          closeEditor();
-          btnSaveEdit.disabled = false;
-          btnAutoEnhance.disabled = false;
-        }, "image/jpeg", 0.85);
-      } else {
-        btnAutoEnhance.textContent = "Enhancing...";
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        const formData = new FormData();
-        formData.append("image_data", dataUrl);
-        const csrfInput = document.querySelector('input[name="csrf_token"]');
-        if (csrfInput) formData.append("csrf_token", csrfInput.value);
-
-        fetch("/api/auto_enhance_preview", {
-          method: "POST",
-          body: formData,
-          credentials: "same-origin"
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            fetch(data.image_data)
-              .then(res => res.blob())
-              .then(blob => {
-                 const newFile = new File([blob], originalFile.name, { type: "image/jpeg" });
-                 selectedFiles[editingIndex] = newFile;
-                 releasePreviewUrl(originalFile);
-                 renderSelectedFiles();
-                 closeEditor();
-              });
-          } else {
-            alert("Error enhancing photo: " + data.error);
-          }
-        })
-        .catch(err => {
-          alert("Network error during enhancement.");
-        })
-        .finally(() => {
-          btnSaveEdit.disabled = false;
-          btnAutoEnhance.disabled = false;
-          btnAutoEnhance.textContent = "✨ Auto Enhance & Save";
-        });
-      }
-    }
-
-    document.getElementById("btnSaveEdit").addEventListener("click", () => saveEditedPhoto(false));
-    document.getElementById("btnAutoEnhance").addEventListener("click", () => saveEditedPhoto(true));
+      canvas.toBlob((blob) => {
+        const newFile = new File([blob], originalFile.name, { type: "image/jpeg" });
+        selectedFiles[editingIndex] = newFile;
+        releasePreviewUrl(originalFile);
+        renderSelectedFiles();
+        closeEditor();
+        btnSaveEdit.disabled = false;
+        btnToggleEnhance.disabled = false;
+      }, "image/jpeg", 0.85);
+    });
 
     renderSelectedFiles();
     setLoadingStep(0);
