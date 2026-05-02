@@ -1066,7 +1066,7 @@
         editorImage.src = originalImageUrl;
         editorModal.classList.add("active");
         if (cropper) cropper.destroy();
-        cropper = new Cropper(editorImage, { viewMode: 2 });
+        cropper = new Cropper(editorImage, { viewMode: 2, checkOrientation: false });
       });
     });
 
