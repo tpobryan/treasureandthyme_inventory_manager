@@ -511,7 +511,10 @@
 
               <div class="field">
                 <label for="editPhotoInput">Add More Photos</label>
-                <button type="button" id="btnSelectMorePhotos" style="margin-bottom: 12px; width: 100%;">📸 Select Photos...</button>
+                <div class="button-row" style="margin-top: 0; margin-bottom: 12px; display: flex; gap: 8px;">
+                  <button type="button" id="btnSelectMorePhotos" style="flex: 1;">📸 Select Photos...</button>
+                  <button type="button" id="btnClearPendingPhotos" class="secondary" style="display: none; padding: 12px;">Clear</button>
+                </div>
                 <input
                   id="editPhotoInput"
                   type="file"
@@ -520,34 +523,114 @@
                   multiple
                   style="display: none;"
                 >
-                <div id="selectedPhotosCount" style="font-size: 0.9rem; color: var(--muted); margin-bottom: 12px; display: none;"></div>
+                <div id="pendingPhotosGrid" class="thumb-grid" style="display: none; margin-bottom: 16px; border: 2px dashed var(--border); padding: 12px; border-radius: 12px; background: #fafafa;"></div>
               </div>
 
               <div class="button-row" style="margin-top: 0;">
-                <button type="submit" class="secondary" style="width: 100%;">Upload Selected Photos To Draft</button>
+                <button type="submit" class="secondary" id="btnSubmitPending" style="width: 100%; display: none; background: #3b82f6; color: white; border-color: #3b82f6;">Upload Selected Photos To Draft</button>
               </div>
             </form>
             
             <script>
               document.addEventListener('DOMContentLoaded', function() {
                 const btnSelectMorePhotos = document.getElementById('btnSelectMorePhotos');
+                const btnClearPendingPhotos = document.getElementById('btnClearPendingPhotos');
+                const btnSubmitPending = document.getElementById('btnSubmitPending');
                 const editPhotoInput = document.getElementById('editPhotoInput');
-                const selectedPhotosCount = document.getElementById('selectedPhotosCount');
+                const pendingPhotosGrid = document.getElementById('pendingPhotosGrid');
+                
+                let pendingFiles = [];
+                const pendingPreviewUrls = new Map();
+
+                function syncFileInput() {
+                  const dt = new DataTransfer();
+                  for (let file of pendingFiles) {
+                    dt.items.add(file);
+                  }
+                  editPhotoInput.files = dt.files;
+                }
+
+                function updatePendingPreviews() {
+                  if (pendingFiles.length === 0) {
+                    pendingPhotosGrid.style.display = 'none';
+                    btnSubmitPending.style.display = 'none';
+                    btnClearPendingPhotos.style.display = 'none';
+                    pendingPhotosGrid.innerHTML = '';
+                    btnSelectMorePhotos.textContent = "📸 Select Photos...";
+                    return;
+                  }
+                  
+                  pendingPhotosGrid.style.display = 'grid';
+                  btnSubmitPending.style.display = 'block';
+                  btnClearPendingPhotos.style.display = 'block';
+                  pendingPhotosGrid.innerHTML = '';
+                  
+                  pendingFiles.forEach((file, index) => {
+                    const thumb = document.createElement('div');
+                    thumb.className = 'thumb';
+                    thumb.style.cursor = 'default';
+                    
+                    let url = pendingPreviewUrls.get(file);
+                    if (!url) {
+                      url = URL.createObjectURL(file);
+                      pendingPreviewUrls.set(file, url);
+                    }
+                    
+                    const img = document.createElement('img');
+                    img.src = url;
+                    
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'thumb-name';
+                    nameDiv.textContent = file.name;
+                    
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'thumb-actions';
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'danger';
+                    removeBtn.innerHTML = '🗑️ Remove';
+                    removeBtn.style.padding = '8px';
+                    removeBtn.onclick = (e) => {
+                      e.preventDefault();
+                      pendingFiles.splice(index, 1);
+                      URL.revokeObjectURL(url);
+                      pendingPreviewUrls.delete(file);
+                      syncFileInput();
+                      updatePendingPreviews();
+                    };
+                    
+                    actionsDiv.appendChild(removeBtn);
+                    thumb.appendChild(img);
+                    thumb.appendChild(nameDiv);
+                    thumb.appendChild(actionsDiv);
+                    
+                    pendingPhotosGrid.appendChild(thumb);
+                  });
+                  
+                  btnSelectMorePhotos.textContent = "📸 Add More Photos...";
+                }
 
                 btnSelectMorePhotos.addEventListener('click', function() {
                   editPhotoInput.click();
                 });
 
                 editPhotoInput.addEventListener('change', function() {
-                  const count = this.files.length;
-                  if (count > 0) {
-                    selectedPhotosCount.textContent = count + " photo(s) selected ready to upload.";
-                    selectedPhotosCount.style.display = "block";
-                    btnSelectMorePhotos.textContent = "📸 Select Different Photos...";
-                  } else {
-                    selectedPhotosCount.style.display = "none";
-                    btnSelectMorePhotos.textContent = "📸 Select Photos...";
+                  if (this.files.length > 0) {
+                    for (let file of this.files) {
+                      pendingFiles.push(file);
+                    }
                   }
+                  syncFileInput();
+                  updatePendingPreviews();
+                });
+
+                btnClearPendingPhotos.addEventListener('click', function() {
+                  pendingFiles = [];
+                  pendingPreviewUrls.forEach(url => URL.revokeObjectURL(url));
+                  pendingPreviewUrls.clear();
+                  syncFileInput();
+                  updatePendingPreviews();
                 });
               });
             </script>
