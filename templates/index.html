@@ -919,7 +919,7 @@
       editorImage.src = originalImageUrl;
       editorModal.classList.add("active");
       if (cropper) cropper.destroy();
-      cropper = new Cropper(editorImage, { viewMode: 2, checkOrientation: false });
+      cropper = new Cropper(editorImage, { viewMode: 2, checkOrientation: false, autoCrop: false });
     }
 
     function closeEditor() {
