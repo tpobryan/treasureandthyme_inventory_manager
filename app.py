@@ -46,6 +46,8 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
 app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+app.config["MAX_FORM_MEMORY_SIZE"] = 50 * 1024 * 1024
 
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
