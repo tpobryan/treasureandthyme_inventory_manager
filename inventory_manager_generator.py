@@ -229,9 +229,9 @@ Pet Supplies & Accessories
 - condition_summary: short neutral condition note based on visible evidence and seller notes
 - keywords: 10-15 comma-separated search phrases
 
-When identification is uncertain, produce the top three plausible identifications ranked from most likely to least likely.
-Each option should be meaningfully different if possible.
-Do not create artificial differences just to fill three slots.
+When identification is highly certain (e.g., clear marks, unmistakable form, or confirmed by seller notes), return exactly ONE high-quality option.
+When identification is uncertain, or when there are multiple plausible interpretations (e.g., an item could be either a specific designer piece or a later reproduction), return 2-3 distinct options representing those different possibilities.
+Do not create slight variations of the same theme; each option must represent a meaningfully different interpretation of the item.
 
 Return only valid JSON with this structure:
 {
@@ -384,9 +384,6 @@ def _normalize_output(data: dict[str, Any]) -> dict[str, list[dict[str, str | in
         if isinstance(opt, dict):
             normalized.append(_normalize_option(opt, i))
 
-    while len(normalized) < 3:
-        normalized.append(_blank_option(len(normalized) + 1))
-
     return {"options": normalized}
 
 
@@ -409,7 +406,9 @@ class InventoryManagerGenerator:
 {MASTER_INSTRUCTION}
 
 Task:
-Generate the top three plausible InventoryManager listing options from the item photos and optional seller notes.
+Generate the most plausible InventoryManager listing options from the item photos and optional seller notes.
+- If you are highly certain about the item, return exactly ONE option.
+- If the item is ambiguous or could be multiple things, return 2-3 distinct options.
 
 Seller notes:
 {seller_notes if seller_notes else "None provided."}
