@@ -3,37 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Auction Dashboard</title>
+  <title>Inventory Manager | Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f6f7fb;
+      --bg: #fdfcf9;
       --card: #ffffff;
-      --border: #d9deea;
-      --text: #1f2937;
-      --muted: #6b7280;
-      --accent: #2563eb;
-      --accent-hover: #1d4ed8;
-      --radius: 14px;
-      --ready-bg: #ecfdf5;
-      --ready-text: #166534;
-      --published-bg: #eff6ff;
-      --published-text: #1d4ed8;
-      --update-bg: #fff7ed;
-      --update-text: #c2410c;
-      --removed-bg: #fef2f2;
+      --border: #e8e4db;
+      --text: #2c2f2d;
+      --muted: #6b716d;
+      --accent: #1e2d24;
+      --accent-hover: #2d4235;
+      --gold: #b89b5e;
+      --radius: 18px;
+      --ready-bg: #f1f5f2;
+      --ready-text: #2d4a35;
+      --published-bg: #f0f4f9;
+      --published-text: #2d4263;
+      --update-bg: #fff9f0;
+      --update-text: #8c5d1e;
+      --removed-bg: #fdf2f2;
       --removed-text: #991b1b;
       --etsy: #eb6d20;
       --ebay: #0064d2;
-      --platform-bg: #f3f4f6;
-      --platform-text: #4b5563;
+      --platform-bg: #f8f8f6;
+      --platform-text: #5c615e;
     }
 
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
+      line-height: 1.5;
     }
     .wrap {
       max-width: 1200px;
@@ -77,8 +82,11 @@
     }
     h1 {
       margin: 0 0 8px;
-      font-size: 1.9rem;
-      line-height: 1.2;
+      font-family: 'Playfair Display', serif;
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--accent);
     }
     .sub {
       margin: 0;
@@ -139,13 +147,18 @@
     }
     .summary-card h2 {
       margin: 0;
-      font-size: 2rem;
+      font-family: 'Playfair Display', serif;
+      font-size: 2.4rem;
       line-height: 1;
+      color: var(--accent);
     }
     .summary-card p {
-      margin: 8px 0 0;
+      margin: 10px 0 0;
       color: var(--muted);
+      font-size: 0.85rem;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
     .layout {
       display: grid;
@@ -199,8 +212,10 @@
       color: var(--removed-text);
     }
     .section-title {
-      margin: 0 0 12px;
-      font-size: 1.08rem;
+      margin: 0 0 16px;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.25rem;
+      color: var(--accent);
     }
     .platform-badges {
       display: flex;

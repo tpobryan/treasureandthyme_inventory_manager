@@ -3,27 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Edit InventoryManager Draft</title>
+  <title>Inventory Manager | Edit Draft</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
   <style>
     :root {
-      --bg: #f6f7fb;
+      --bg: #fdfcf9;
       --card: #ffffff;
-      --border: #d9deea;
-      --text: #1f2937;
-      --muted: #6b7280;
-      --accent: #2563eb;
-      --accent-hover: #1d4ed8;
-      --radius: 14px;
+      --border: #e8e4db;
+      --text: #2c2f2d;
+      --muted: #6b716d;
+      --accent: #1e2d24;
+      --accent-hover: #2d4235;
+      --gold: #b89b5e;
+      --radius: 18px;
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
+      line-height: 1.5;
     }
 
     .wrap {
@@ -49,11 +54,12 @@
 
     .lot-preview {
       display: inline-block;
-      padding: 10px 12px;
-      background: #eef2ff;
-      border: 1px solid #c7d2fe;
-      border-radius: 10px;
+      padding: 10px 14px;
+      background: #f1f5f2;
+      border: 1px solid #d1dbd4;
+      border-radius: 12px;
       font-weight: 600;
+      color: var(--accent);
     }
 
     .flash {
@@ -88,13 +94,18 @@
     }
 
     h1 {
-      font-size: 1.5rem;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--accent);
       margin-bottom: 6px;
     }
 
     h2 {
-      font-size: 1.08rem;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
       margin-bottom: 12px;
+      color: var(--accent);
     }
 
     h3 {
