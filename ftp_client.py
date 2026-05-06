@@ -38,7 +38,7 @@ def ensure_remote_dir(ftp, remote_dir: str) -> None:
     ftp.mkd(remote_dir)
     ftp.cwd(remote_dir)
 
-def upload_lot_photos_to_auctionninja(
+def upload_lot_photos_to_inventory_manager(
     local_files: list[Any],
     auction_number: str,
     lot_number: int,
@@ -71,7 +71,7 @@ def upload_lot_photos_to_auctionninja(
 
     return uploaded_names
 
-def delete_lot_photos_from_auctionninja(
+def delete_lot_photos_from_inventory_manager(
     auction_number: str,
     remote_names: list[str],
 ) -> tuple[list[str], list[str]]:

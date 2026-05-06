@@ -28,7 +28,7 @@ from utils import (
     form_from_saved_item,
     load_saved_files_for_temp_id,
 )
-from ftp_client import upload_lot_photos_to_auctionninja
+from ftp_client import upload_lot_photos_to_inventory_manager
 
 items_bp = Blueprint("items", __name__)
 

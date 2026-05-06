@@ -38,6 +38,8 @@ from routes.exports import exports_bp
 from routes.main import main_bp
 from routes.admin import admin_bp
 from routes.auth import auth_bp
+from routes.integrations import integrations_bp
+from routes.webhooks import webhooks_bp
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -60,6 +62,8 @@ app.register_blueprint(exports_bp)
 app.register_blueprint(main_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(integrations_bp)
+app.register_blueprint(webhooks_bp)
 
 
 @app.route("/healthz", methods=["GET"])

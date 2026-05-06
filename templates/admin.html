@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin - AuctionNinja Listing Generator</title>
+  <title>Admin - InventoryManager Listing Generator</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -198,7 +198,7 @@
         <div class="danger-card" style="border-color: #93c5fd; background: #eff6ff;">
           <p class="danger-title" style="color: #1d4ed8;">Upload FTP Photos By Lot Number</p>
           <p class="danger-copy" style="color: #1e3a8a;">
-            Retroactively upload photos for a specific saved lot to the AuctionNinja FTP server.
+            Retroactively upload photos for a specific saved lot to the InventoryManager FTP server.
           </p>
           <form action="{{ url_for('admin.upload_remote_ftp') }}" method="post">
             {{ csrf_input() }}
@@ -235,7 +235,7 @@
         <div class="danger-card">
           <p class="danger-title">Delete FTP Photos By Lot Number</p>
           <p class="danger-copy">
-            Use this if a saved lot should no longer be included in the auction. This removes the remote FTP photos tied to that lot number from AuctionNinja.
+            Use this if a saved lot should no longer be included in the auction. This removes the remote FTP photos tied to that lot number from InventoryManager.
           </p>
 
           <form action="{{ url_for('admin.delete_remote_upload') }}" method="post">
@@ -254,7 +254,7 @@
               <button
                 type="submit"
                 class="danger-button"
-                onclick="return confirm('Delete the FTP photos tied to this lot number from AuctionNinja?');"
+                onclick="return confirm('Delete the FTP photos tied to this lot number from InventoryManager?');"
               >
                 Delete FTP Photos
               </button>

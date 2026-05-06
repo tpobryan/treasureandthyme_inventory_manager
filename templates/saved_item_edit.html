@@ -364,6 +364,33 @@
             {{ csrf_input() }}
             <input type="hidden" name="current_filter" value="{{ current_filter }}">
             <div class="field">
+              <label for="Listing Strategy">Listing Strategy</label>
+              <select id="Listing Strategy" name="Listing Strategy" onchange="toggleStrategyFields()">
+                <option value="auction" {% if form.get('Listing Strategy', 'auction') == 'auction' %}selected{% endif %}>Auction (InventoryManager Batch)</option>
+                <option value="retail" {% if form.get('Listing Strategy') == 'retail' %}selected{% endif %}>Retail (eBay / Etsy)</option>
+              </select>
+            </div>
+
+            <div id="retail_fields" style="display: {% if form.get('Listing Strategy') == 'retail' %}block{% else %}none{% endif %}; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #eef2ff; margin-bottom: 14px;">
+              <p style="margin-top: 0; font-weight: bold; margin-bottom: 8px;">Retail Platform Settings</p>
+              <div class="field">
+                <label for="eBay Category ID">eBay Category ID</label>
+                <input type="text" id="eBay Category ID" name="eBay Category ID" value="{{ form.get('eBay Category ID', '') }}" placeholder="e.g. 123456">
+              </div>
+              <div class="field" style="margin-bottom: 0;">
+                <label for="Etsy Taxonomy ID">Etsy Taxonomy ID</label>
+                <input type="text" id="Etsy Taxonomy ID" name="Etsy Taxonomy ID" value="{{ form.get('Etsy Taxonomy ID', '') }}" placeholder="e.g. 1234">
+              </div>
+            </div>
+
+            <script>
+              function toggleStrategyFields() {
+                var strategy = document.getElementById("Listing Strategy").value;
+                document.getElementById("retail_fields").style.display = (strategy === 'retail') ? 'block' : 'none';
+              }
+            </script>
+
+            <div class="field">
               <label for="Title">Title</label>
               <textarea id="Title" name="Title" rows="3">{{ form['Title'] }}</textarea>
             </div>

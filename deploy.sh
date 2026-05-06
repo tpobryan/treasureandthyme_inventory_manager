@@ -6,7 +6,7 @@ if [[ -n $(git status -s) ]]; then
   exit 1
 fi
 
-APP_NAME="auctionninja_local_app"
+APP_NAME="inventory_manager"
 REMOTE_HOST="162.243.127.166"
 REMOTE_USER="tobryan"
 REMOTE_DIR="/opt/${APP_NAME}"
@@ -34,11 +34,16 @@ if [ ! -f ".env" ]; then
     echo "WARNING: .env file is missing on the server! The app may fail to start."
 fi
 
+mkdir -p data
 python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip
 pip install -r requirements.txt
+
+# Ensure the app can write to its socket and data directory
+sudo chown -R tobryan:www-data .
+sudo chmod -R 775 data
 
 sudo systemctl restart ${SERVICE_NAME}
 sudo systemctl status ${SERVICE_NAME} --no-pager

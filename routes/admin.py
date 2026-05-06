@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 
 from ftp_client import (
-    delete_lot_photos_from_auctionninja,
-    upload_lot_photos_to_auctionninja,
+    delete_lot_photos_from_inventory_manager,
+    upload_lot_photos_to_inventory_manager,
 )
 from database import (
     fetch_saved_item,
@@ -41,7 +41,7 @@ def delete_remote_upload():
         return redirect(url_for("admin.admin"))
 
     try:
-        deleted_names, missing_names = delete_lot_photos_from_auctionninja(
+        deleted_names, missing_names = delete_lot_photos_from_inventory_manager(
             auction_number=auction_number,
             remote_names=[str(name) for name in remote_names],
         )
@@ -104,7 +104,7 @@ def upload_remote_ftp():
 
     try:
         auction_photo_index = reserve_next_auction_photo_index(auction_number)
-        uploaded_names = upload_lot_photos_to_auctionninja(
+        uploaded_names = upload_lot_photos_to_inventory_manager(
             local_files=local_jpgs,
             auction_number=auction_number,
             lot_number=lot_number,
@@ -224,7 +224,7 @@ def upload_selected_ftp():
 
         try:
             auction_photo_index = reserve_next_auction_photo_index(current_lot_auction)
-            uploaded_names = upload_lot_photos_to_auctionninja(files_to_upload, current_lot_auction, lot_number)
+            uploaded_names = upload_lot_photos_to_inventory_manager(files_to_upload, current_lot_auction, lot_number)
             if uploaded_names:
                 record_ftp_upload(lot_number, current_lot_auction, auction_photo_index, uploaded_names)
                 uploaded_count += 1

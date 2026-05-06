@@ -1,6 +1,6 @@
 import pytest
 
-from auctionninja_generator import _parse_model_json
+from inventory_manager_generator import _parse_model_json
 
 
 def test_parse_model_json_accepts_valid_json():

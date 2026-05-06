@@ -1,13 +1,13 @@
 # Auction CSV Helper
 
-A simple local web app for your AuctionNinja workflow.
+A simple local web app for your InventoryManager workflow.
 
 What it does:
 - lets you upload item photos from desktop or iPhone/iPad photo library
 - sends the photos to the OpenAI API for a draft title, description, tags, and category
 - shows the draft in a web form so you can edit it manually
 - saves approved items with the next sequential lot number
-- exports an AuctionNinja-ready CSV when you are ready to publish lots
+- exports an InventoryManager-ready CSV when you are ready to publish lots
 - tracks lots by auction with statuses and export history when `DATABASE_URL` is configured
 
 ## Files created by the app
@@ -60,10 +60,10 @@ DATABASE_URL=sqlite:///data/auction_items.db
 
 **For MySQL (Good for a VPS):**
 ```env
-DATABASE_URL=mysql://username:password@127.0.0.1:3306/auctionninja_local_app
+DATABASE_URL=mysql://username:password@127.0.0.1:3306/inventory_manager
 ```
 
-If `DATABASE_URL` is set, saved items go into the database and the home page will offer a fresh CSV download for AuctionNinja import. If it is not set, the app keeps using `data/auction_items.csv` as before.
+If `DATABASE_URL` is set, saved items go into the database and the home page will offer a fresh CSV download for InventoryManager import. If it is not set, the app keeps using `data/auction_items.csv` as before.
 
 Optional login settings for hosted use:
 
@@ -74,7 +74,7 @@ APP_LOGIN_PASSWORD=choose-a-strong-password
 
 If `APP_LOGIN_PASSWORD` is set, the app requires login before any page or image route can be used. This is recommended before exposing the app to the internet.
 
-Optional FTP settings for uploading saved lot photos to AuctionNinja:
+Optional FTP settings for uploading saved lot photos to InventoryManager:
 
 ```env
 AUCTION_NUMBER=
@@ -159,8 +159,8 @@ For this app, a VPS is a strong fit because:
 
 This repo now includes starter files for that setup:
 
-- [`deploy/systemd/auctionninja.service.example`](/Users/tobryan/ny5and10/auctionninja_local_app/auctionninja_local_app/deploy/systemd/auctionninja.service.example)
-- [`deploy/nginx/auctionninja.conf.example`](/Users/tobryan/ny5and10/auctionninja_local_app/auctionninja_local_app/deploy/nginx/auctionninja.conf.example)
+- [`deploy/systemd/inventory_manager.service.example`](/Users/tobryan/ny5and10/inventory_manager/inventory_manager/deploy/systemd/inventory_manager.service.example)
+- [`deploy/nginx/inventory_manager.conf.example`](/Users/tobryan/ny5and10/inventory_manager/inventory_manager/deploy/nginx/inventory_manager.conf.example)
 
 Suggested VPS stack:
 
@@ -173,16 +173,16 @@ Suggested VPS stack:
 
 High-level setup:
 
-1. Clone the repo to a path like `/opt/auctionninja_local_app`
+1. Clone the repo to a path like `/opt/inventory_manager`
 2. Create a virtualenv and run `pip install -r requirements.txt`
 3. Copy `.env.example` to `.env` and fill in:
    - `OPENAI_API_KEY`
    - `FLASK_SECRET_KEY`
    - `DATABASE_URL`
    - `APP_LOGIN_PASSWORD`
-   - FTP settings if you use AuctionNinja photo upload
-4. Copy the systemd example into `/etc/systemd/system/auctionninja.service`
-5. Copy the nginx example into `/etc/nginx/sites-available/auctionninja`
+   - FTP settings if you use InventoryManager photo upload
+4. Copy the systemd example into `/etc/systemd/system/inventory_manager.service`
+5. Copy the nginx example into `/etc/nginx/sites-available/inventory_manager`
 6. Enable the nginx site and systemd service
 7. Add HTTPS with Certbot
 
@@ -190,13 +190,13 @@ Example commands:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable auctionninja.service
-sudo systemctl start auctionninja.service
-sudo systemctl status auctionninja.service
+sudo systemctl enable inventory_manager.service
+sudo systemctl start inventory_manager.service
+sudo systemctl status inventory_manager.service
 ```
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/auctionninja /etc/nginx/sites-enabled/auctionninja
+sudo ln -s /etc/nginx/sites-available/inventory_manager /etc/nginx/sites-enabled/inventory_manager
 sudo nginx -t
 sudo systemctl reload nginx
 ```

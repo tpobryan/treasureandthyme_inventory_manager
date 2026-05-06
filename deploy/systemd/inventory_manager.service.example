@@ -1,0 +1,18 @@
+[Unit]
+Description=InventoryManager Local App
+After=network.target
+
+[Service]
+Type=simple
+User=inventory_manager
+Group=inventory_manager
+WorkingDirectory=/opt/inventory_manager
+Environment=PATH=/opt/inventory_manager/.venv/bin
+EnvironmentFile=/opt/inventory_manager/.env
+ExecStart=/opt/inventory_manager/.venv/bin/waitress-serve --host 127.0.0.1 --port 5000 app:app
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

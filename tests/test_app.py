@@ -133,7 +133,7 @@ def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch)
     )
     assert good_login.status_code == 200
     assert b"Signed in." in good_login.data
-    assert b"AuctionNinja Listing Generator" in good_login.data
+    assert b"InventoryManager Listing Generator" in good_login.data
 
 
 def test_login_rejects_missing_csrf_token_when_auth_is_enabled(test_env, monkeypatch):

@@ -12,11 +12,11 @@ from openai import OpenAI
 
 
 MASTER_INSTRUCTION = """
-You are a dedicated AuctionNinja listing generator.
+You are a dedicated InventoryManager listing generator.
 
 Your job is to create factual, concise, resale-focused listing content from item photos and optional seller notes.
 
-You should write in a style that matches an experienced resale seller preparing AuctionNinja listings:
+You should write in a style that matches an experienced resale seller preparing InventoryManager listings:
 - practical
 - clear
 - honest
@@ -25,8 +25,8 @@ You should write in a style that matches an experienced resale seller preparing 
 - optimized for search, but not spammy
 
 Primary goals:
-- Produce clean, searchable AuctionNinja titles
-- Produce short, direct descriptions
+- Produce clean, searchable InventoryManager titles
+- Produce short, direct descriptions, and append a section with platform-specific SEO keywords and formatting tailored for eBay and Etsy.
 - Assign a broad category
 - Summarize condition honestly and neutrally
 - Generate useful search keywords
@@ -46,7 +46,7 @@ Important rules:
 - Keep titles SEO-friendly but not overstuffed
 - Keep descriptions brief and practical
 - Prefer short factual wording over storytelling
-- AuctionNinja style is preferred over Etsy or eBay style
+- InventoryManager style is preferred over Etsy or eBay style
 
 Material and mark handling:
 - Look carefully for visible clues about material, such as sterling marks, karat marks, glaze, clay body, molded glass, metal tone, wood grain, stone texture, etc.
@@ -76,8 +76,8 @@ Field rules:
 - confidence_note: short explanation of why this is plausible, including uncertainty when needed
 - material_notes: short note about visible material clues and level of certainty
 - mark_notes: short note about visible marks, signatures, tags, or lack of marks
-- title: concise, searchable, AuctionNinja-appropriate
-- description: 1-2 short factual sentences
+- title: concise, searchable, InventoryManager-appropriate
+- description: 1-2 short factual sentences for the base description. Then, append a short section titled 'Platform Specifics' containing SEO keywords and formatting tailored specifically for eBay and Etsy.
 - category: choose most appropriate category from this list: 
 Jewelry & Watches
 Clothing & Fashion Accessories
@@ -390,7 +390,7 @@ def _normalize_output(data: dict[str, Any]) -> dict[str, list[dict[str, str | in
     return {"options": normalized}
 
 
-class AuctionNinjaGenerator:
+class InventoryManagerGenerator:
     def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY", "dummy-key-if-missing"))
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4.1")
@@ -409,7 +409,7 @@ class AuctionNinjaGenerator:
 {MASTER_INSTRUCTION}
 
 Task:
-Generate the top three plausible AuctionNinja listing options from the item photos and optional seller notes.
+Generate the top three plausible InventoryManager listing options from the item photos and optional seller notes.
 
 Seller notes:
 {seller_notes if seller_notes else "None provided."}
@@ -450,7 +450,7 @@ Return only valid JSON.
     {MASTER_INSTRUCTION}
 
     Task:
-    Revise the current AuctionNinja listing option using the same item photos, seller notes, and revision request.
+    Revise the current InventoryManager listing option using the same item photos, seller notes, and revision request.
 
     Important revision behavior:
     - Preserve the current option's overall identification and direction unless the revision request clearly asks to change it
@@ -482,7 +482,7 @@ Return only valid JSON.
     - Return only valid JSON
     - Return one revised option only
     - Keep the same field structure
-    - Stay concise and AuctionNinja-appropriate
+    - Stay concise and InventoryManager-appropriate
 
     Return JSON with these keys:
     identification

@@ -178,6 +178,34 @@ def ensure_item_store_ready() -> None:
             _ensure_sqlite_column(cursor, "auction_items", "auction_id", "INTEGER")
             _ensure_sqlite_column(cursor, "auction_items", "last_export_batch", "TEXT")
             _ensure_sqlite_column(cursor, "auction_items", "published_at", "TEXT")
+            _ensure_sqlite_column(cursor, "auction_items", "listing_strategy", "TEXT NOT NULL DEFAULT 'auction'")
+            _ensure_sqlite_column(cursor, "auction_items", "platform_data", "TEXT")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS item_platform_status (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lot_number INTEGER NOT NULL,
+                    platform_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    remote_id TEXT,
+                    published_at TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(lot_number, platform_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS integrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform_id TEXT NOT NULL UNIQUE,
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    settings_json TEXT,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS export_batches (
@@ -281,6 +309,34 @@ def ensure_item_store_ready() -> None:
             _ensure_mysql_column(cursor, "auction_items", "auction_id", "INT NULL")
             _ensure_mysql_column(cursor, "auction_items", "last_export_batch", "VARCHAR(255) NULL")
             _ensure_mysql_column(cursor, "auction_items", "published_at", "TIMESTAMP NULL DEFAULT NULL")
+            _ensure_mysql_column(cursor, "auction_items", "listing_strategy", "VARCHAR(32) NOT NULL DEFAULT 'auction'")
+            _ensure_mysql_column(cursor, "auction_items", "platform_data", "LONGTEXT NULL")
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS item_platform_status (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    lot_number INT NOT NULL,
+                    platform_id VARCHAR(64) NOT NULL,
+                    status VARCHAR(64) NOT NULL,
+                    remote_id VARCHAR(255) NULL,
+                    published_at TIMESTAMP NULL DEFAULT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_item_platform (lot_number, platform_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS integrations (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    platform_id VARCHAR(64) NOT NULL UNIQUE,
+                    access_token TEXT NULL,
+                    refresh_token TEXT NULL,
+                    settings_json LONGTEXT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+                """
+            )
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS export_batches (
@@ -822,6 +878,13 @@ def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: s
         "image_folder": image_folder,
         "last_export_batch": "",
         "published_at": "",
+        "listing_strategy": form.get("Listing Strategy", "auction"),
+        "platform_data": json.dumps({
+            "ebay_category_id": form.get("eBay Category ID", ""),
+            "etsy_taxonomy_id": form.get("Etsy Taxonomy ID", ""),
+            "publish_to_ebay": form.get("Publish to eBay", "") == "yes",
+            "publish_to_etsy": form.get("Publish to Etsy", "") == "yes",
+        }) if form.get("Listing Strategy") == "retail" else "",
     }
 
 
@@ -833,7 +896,7 @@ def append_item_record(record: dict[str, str]) -> None:
     try:
         cursor = connection.cursor()
         auction_id = int(record.get("auction_id", get_current_auction_id()))
-        placeholders = ", ".join(["?"] * 18) if dialect == "sqlite" else ", ".join(["%s"] * 18)
+        placeholders = ", ".join(["?"] * 20) if dialect == "sqlite" else ", ".join(["%s"] * 20)
         cursor.execute(
             f"""
             INSERT INTO auction_items (
@@ -854,7 +917,9 @@ def append_item_record(record: dict[str, str]) -> None:
                 shipping_available,
                 category,
                 status,
-                image_folder
+                image_folder,
+                listing_strategy,
+                platform_data
             ) VALUES ({placeholders})
             """,
             (
@@ -876,8 +941,47 @@ def append_item_record(record: dict[str, str]) -> None:
                 record["category"],
                 record["status"],
                 record["image_folder"],
+                record.get("listing_strategy", "auction"),
+                record.get("platform_data", ""),
             ),
         )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def initialize_platform_status(lot_number: int, platforms: list[str]) -> None:
+    if not platforms:
+        return
+        
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+
+    try:
+        cursor = connection.cursor()
+        for platform_id in platforms:
+            if dialect == "sqlite":
+                cursor.execute(
+                    """
+                    INSERT INTO item_platform_status (lot_number, platform_id, status, updated_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(lot_number, platform_id) DO UPDATE SET
+                        status=excluded.status,
+                        updated_at=CURRENT_TIMESTAMP
+                    """,
+                    (lot_number, platform_id, "pending")
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO item_platform_status (lot_number, platform_id, status)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        status=VALUES(status)
+                    """,
+                    (lot_number, platform_id, "pending")
+                )
         connection.commit()
     finally:
         connection.close()
@@ -1164,7 +1268,8 @@ def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str,
                 status,
                 category,
                 updated_at,
-                published_at
+                published_at,
+                listing_strategy
             FROM auction_items
             WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
               AND status IN ({placeholders})
@@ -1186,7 +1291,102 @@ def fetch_dashboard_items(statuses: list[str], limit: int = 5) -> list[dict[str,
         else:
             continue
         items.append(item)
+    
+    # Fetch platform statuses for these items
+    if items:
+        lot_numbers = [int(item["lot_number"]) for item in items]
+        platform_map = fetch_platform_statuses_for_lots(lot_numbers)
+        for item in items:
+            item["platform_statuses"] = platform_map.get(int(item["lot_number"]), [])
+            
     return items
+
+
+def fetch_platform_statuses_for_lots(lot_numbers: list[int]) -> dict[int, list[dict[str, str]]]:
+    if not lot_numbers:
+        return {}
+        
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+    
+    try:
+        cursor = connection.cursor()
+        placeholders = ", ".join(["?"] * len(lot_numbers)) if dialect == "sqlite" else ", ".join(["%s"] * len(lot_numbers))
+        cursor.execute(
+            f"""
+            SELECT lot_number, platform_id, status, remote_id, updated_at
+            FROM item_platform_status
+            WHERE lot_number IN ({placeholders})
+            """,
+            tuple(lot_numbers)
+        )
+        rows = cursor.fetchall()
+        
+        result: dict[int, list[dict[str, str]]] = {}
+        for row in rows:
+            lot_num = int(_extract_row_value(row, "lot_number", 0, 0))
+            if lot_num not in result:
+                result[lot_num] = []
+            
+            status_info = {
+                "platform_id": str(_extract_row_value(row, "platform_id", 1, "")),
+                "status": str(_extract_row_value(row, "status", 2, "")),
+                "remote_id": str(_extract_row_value(row, "remote_id", 3, "")),
+                "updated_at": str(_extract_row_value(row, "updated_at", 4, "")),
+            }
+            result[lot_num].append(status_info)
+        return result
+    finally:
+        connection.close()
+
+
+def fetch_recent_retail_items(limit: int = 10) -> list[dict[str, Any]]:
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    assert connection is not None
+    
+    try:
+        cursor = connection.cursor()
+        limit_placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"""
+            SELECT lot_number, title, status, category, updated_at, listing_strategy, platform_data
+            FROM auction_items
+            WHERE listing_strategy = 'retail'
+            ORDER BY updated_at DESC
+            LIMIT {limit_placeholder}
+            """,
+            (limit,)
+        )
+        records = cursor.fetchall()
+        
+        items = []
+        for record in records:
+            if isinstance(record, sqlite3.Row):
+                item = {key: record[key] for key in record.keys()}
+            else:
+                # Basic dict/tuple extraction fallback
+                item = {
+                    "lot_number": record[0],
+                    "title": record[1],
+                    "status": record[2],
+                    "category": record[3],
+                    "updated_at": record[4],
+                    "listing_strategy": record[5],
+                    "platform_data": record[6],
+                }
+            items.append(item)
+            
+        if items:
+            lot_numbers = [int(item["lot_number"]) for item in items]
+            platform_map = fetch_platform_statuses_for_lots(lot_numbers)
+            for item in items:
+                item["platform_statuses"] = platform_map.get(int(item["lot_number"]), [])
+        
+        return items
+    finally:
+        connection.close()
 
 
 def fetch_saved_item(lot_number: int) -> dict[str, str] | None:
@@ -1258,6 +1458,11 @@ def saved_item_fields_from_form(form: dict[str, str]) -> dict[str, str]:
         "consigner_number": form["Consigner #"],
         "shipping_available": form["Shipping Available"],
         "category": form["Category"],
+        "listing_strategy": form.get("Listing Strategy", "auction"),
+        "platform_data": json.dumps({
+            "ebay_category_id": form.get("eBay Category ID", ""),
+            "etsy_taxonomy_id": form.get("Etsy Taxonomy ID", ""),
+        }) if form.get("Listing Strategy") == "retail" else "",
     }
 
 
@@ -1278,6 +1483,8 @@ def determine_updated_status(existing_record: dict[str, str], updated_fields: di
         "consigner_number",
         "shipping_available",
         "category",
+        "listing_strategy",
+        "platform_data",
     ]
     changed = any((existing_record.get(field, "") or "") != updated_fields.get(field, "") for field in tracked_fields)
 
@@ -1320,6 +1527,8 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     shipping_available = ?,
                     category = ?,
                     status = ?,
+                    listing_strategy = ?,
+                    platform_data = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE lot_number = ? AND auction_id = ?
                 """,
@@ -1339,6 +1548,8 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     updated_fields["shipping_available"],
                     updated_fields["category"],
                     new_status,
+                    updated_fields.get("listing_strategy", "auction"),
+                    updated_fields.get("platform_data", ""),
                     lot_number,
                     get_current_auction_id(),
                 ),
@@ -1362,7 +1573,9 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     consigner_number = %s,
                     shipping_available = %s,
                     category = %s,
-                    status = %s
+                    status = %s,
+                    listing_strategy = %s,
+                    platform_data = %s
                 WHERE lot_number = %s AND auction_id = %s
                 """,
                 (
@@ -1381,6 +1594,8 @@ def update_saved_item_record(lot_number: int, form: dict[str, str]) -> str:
                     updated_fields["shipping_available"],
                     updated_fields["category"],
                     new_status,
+                    updated_fields.get("listing_strategy", "auction"),
+                    updated_fields.get("platform_data", ""),
                     lot_number,
                     get_current_auction_id(),
                 ),

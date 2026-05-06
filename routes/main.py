@@ -9,8 +9,8 @@ from werkzeug.utils import secure_filename
 
 from image_processor import apply_auto_enhance
 
-from auctionninja_generator import AuctionNinjaGenerator
-from ftp_client import upload_lot_photos_to_auctionninja
+from inventory_manager_generator import InventoryManagerGenerator
+from ftp_client import upload_lot_photos_to_inventory_manager
 from database import (
     ITEM_STATUS_READY,
     ITEM_STATUS_NEEDS_UPDATE,
@@ -27,6 +27,8 @@ from database import (
     current_auction_number_for_upload,
     append_item_record,
     fetch_active_draft,
+    initialize_platform_status,
+    fetch_recent_retail_items,
 )
 from utils import (
     UPLOADS_DIR,
@@ -50,7 +52,7 @@ from utils import (
 from database import fetch_active_draft as db_fetch_active_draft
 
 main_bp = Blueprint("main", __name__)
-generator = AuctionNinjaGenerator()
+generator = InventoryManagerGenerator()
 
 def render_edit_page(
     temp_id: str,
@@ -98,6 +100,7 @@ def dashboard():
         recent_exports=list_export_archives()[:5],
         needs_update_items=fetch_dashboard_items([ITEM_STATUS_NEEDS_UPDATE], limit=5),
         ready_items=fetch_dashboard_items([ITEM_STATUS_READY], limit=5),
+        retail_items=fetch_recent_retail_items(limit=10),
     )
 
 @main_bp.route("/analyze", methods=["POST"])
@@ -393,6 +396,17 @@ def save():
         image_folder=final_dir.name,
     )
     append_item_record(record)
+    
+    platforms_to_publish = []
+    if form.get("Listing Strategy") == "retail":
+        if form.get("Publish to eBay") == "yes":
+            platforms_to_publish.append("ebay")
+        if form.get("Publish to Etsy") == "yes":
+            platforms_to_publish.append("etsy")
+            
+    if platforms_to_publish:
+        initialize_platform_status(csv_lot_number, platforms_to_publish)
+        
     clear_active_draft(temp_id=temp_id)
 
     auction_number = current_auction_number_for_upload()
@@ -403,7 +417,7 @@ def save():
         try:
             auction_photo_index = reserve_next_auction_photo_index(auction_number)
             local_jpgs = sorted([p for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() == ".jpg"])
-            uploaded_names = upload_lot_photos_to_auctionninja(
+            uploaded_names = upload_lot_photos_to_inventory_manager(
                 local_files=local_jpgs,
                 auction_number=auction_number,
                 lot_number=csv_lot_number,

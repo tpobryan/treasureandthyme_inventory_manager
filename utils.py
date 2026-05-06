@@ -4,6 +4,7 @@ import os
 import re
 import secrets
 import uuid
+import json
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -211,6 +212,11 @@ def blank_form(seller_notes: str = "") -> dict[str, str]:
         "Item Notes": seller_notes,
         "Consigner #": "",
         "Shipping Available": "",
+        "Listing Strategy": "auction",
+        "eBay Category ID": "",
+        "Etsy Taxonomy ID": "",
+        "Publish to eBay": "",
+        "Publish to Etsy": "",
     }
 
 def options_from_request() -> list[dict]:
@@ -252,6 +258,11 @@ def form_from_request(seller_notes: str = "") -> dict[str, str]:
         "Item Notes": request.form.get("Item Notes", seller_notes).strip(),
         "Consigner #": request.form.get("Consigner #", "").strip(),
         "Shipping Available": request.form.get("Shipping Available", "").strip(),
+        "Listing Strategy": request.form.get("Listing Strategy", "auction").strip(),
+        "eBay Category ID": request.form.get("eBay Category ID", "").strip(),
+        "Etsy Taxonomy ID": request.form.get("Etsy Taxonomy ID", "").strip(),
+        "Publish to eBay": request.form.get("Publish to eBay", "").strip(),
+        "Publish to Etsy": request.form.get("Publish to Etsy", "").strip(),
     }
 
 def form_from_option(option: dict, seller_notes: str = "") -> dict[str, str]:
@@ -269,6 +280,14 @@ def form_from_option(option: dict, seller_notes: str = "") -> dict[str, str]:
     return form
 
 def form_from_saved_item(record: dict[str, str]) -> dict[str, str]:
+    platform_data = {}
+    try:
+        platform_data_str = record.get("platform_data")
+        if platform_data_str:
+            platform_data = json.loads(platform_data_str)
+    except Exception:
+        pass
+        
     return {
         "Title": record.get("title", ""),
         "Description": record.get("description", ""),
@@ -284,6 +303,11 @@ def form_from_saved_item(record: dict[str, str]) -> dict[str, str]:
         "Item Notes": record.get("item_notes", ""),
         "Consigner #": record.get("consigner_number", ""),
         "Shipping Available": record.get("shipping_available", "") or "No",
+        "Listing Strategy": record.get("listing_strategy", "auction"),
+        "eBay Category ID": platform_data.get("ebay_category_id", ""),
+        "Etsy Taxonomy ID": platform_data.get("etsy_taxonomy_id", ""),
+        "Publish to eBay": "yes" if platform_data.get("publish_to_ebay") else "",
+        "Publish to Etsy": "yes" if platform_data.get("publish_to_etsy") else "",
     }
 
 def parse_decimal_field(value: str) -> float | None:

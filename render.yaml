@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: auctionninja-local-app
+    name: inventory_manager-local-app
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
@@ -29,6 +29,6 @@ services:
       - key: FTP_TLS
         value: "false"
     disk:
-      name: auctionninja-data
+      name: inventory_manager-data
       mountPath: /opt/render/project/src/data
       sizeGB: 5

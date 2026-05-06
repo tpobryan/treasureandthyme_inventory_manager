@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Edit AuctionNinja Draft</title>
+  <title>Edit InventoryManager Draft</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
   <style>
     :root {
@@ -872,6 +872,45 @@
               <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
               <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
             {% endfor %}
+
+            <div class="field">
+              <label for="Listing Strategy">Listing Strategy</label>
+              <select id="Listing Strategy" name="Listing Strategy" onchange="toggleStrategyFields()">
+                <option value="auction" {% if form.get('Listing Strategy', 'auction') == 'auction' %}selected{% endif %}>Auction (InventoryManager Batch)</option>
+                <option value="retail" {% if form.get('Listing Strategy') == 'retail' %}selected{% endif %}>Retail (eBay / Etsy)</option>
+              </select>
+            </div>
+
+            <div id="retail_fields" style="display: {% if form.get('Listing Strategy') == 'retail' %}block{% else %}none{% endif %}; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #eef2ff; margin-bottom: 14px;">
+              <p style="margin-top: 0; font-weight: bold; margin-bottom: 8px;">Retail Platform Settings</p>
+              
+              <div style="display: flex; gap: 20px; margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-weight: normal;">
+                  <input type="checkbox" name="Publish to eBay" value="yes" {% if form.get('Publish to eBay') == 'yes' %}checked{% endif %}>
+                  Publish to eBay
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-weight: normal;">
+                  <input type="checkbox" name="Publish to Etsy" value="yes" {% if form.get('Publish to Etsy') == 'yes' %}checked{% endif %}>
+                  Publish to Etsy
+                </label>
+              </div>
+
+              <div class="field">
+                <label for="eBay Category ID">eBay Category ID</label>
+                <input type="text" id="eBay Category ID" name="eBay Category ID" value="{{ form.get('eBay Category ID', '') }}" placeholder="e.g. 123456">
+              </div>
+              <div class="field" style="margin-bottom: 0;">
+                <label for="Etsy Taxonomy ID">Etsy Taxonomy ID</label>
+                <input type="text" id="Etsy Taxonomy ID" name="Etsy Taxonomy ID" value="{{ form.get('Etsy Taxonomy ID', '') }}" placeholder="e.g. 1234">
+              </div>
+            </div>
+
+            <script>
+              function toggleStrategyFields() {
+                var strategy = document.getElementById("Listing Strategy").value;
+                document.getElementById("retail_fields").style.display = (strategy === 'retail') ? 'block' : 'none';
+              }
+            </script>
 
             <div class="field">
               <label for="Title">Title</label>
