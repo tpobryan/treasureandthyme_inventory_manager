@@ -5,7 +5,7 @@ server {
     client_max_body_size 50M;
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://unix:/opt/inventory_manager/inventory_manager.sock;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -16,7 +16,7 @@ server {
     }
 
     location = /healthz {
-        proxy_pass http://127.0.0.1:5000/healthz;
+        proxy_pass http://unix:/opt/inventory_manager/inventory_manager.sock:/healthz;
         access_log off;
     }
 }

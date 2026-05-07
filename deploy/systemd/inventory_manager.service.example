@@ -4,12 +4,15 @@ After=network.target
 
 [Service]
 Type=simple
-User=inventory_manager
-Group=inventory_manager
+User=tobryan
+Group=www-data
 WorkingDirectory=/opt/inventory_manager
-Environment=PATH=/opt/inventory_manager/.venv/bin
+Environment=PATH=/opt/inventory_manager/venv/bin
 EnvironmentFile=/opt/inventory_manager/.env
-ExecStart=/opt/inventory_manager/.venv/bin/waitress-serve --host 127.0.0.1 --port 5000 app:app
+ExecStart=/opt/inventory_manager/venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/opt/inventory_manager/inventory_manager.sock \
+    app:app
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
