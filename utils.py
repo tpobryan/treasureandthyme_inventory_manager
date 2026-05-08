@@ -213,7 +213,11 @@ def blank_form(seller_notes: str = "") -> dict[str, str]:
         "Consigner #": "",
         "Shipping Available": "",
         "Listing Strategy": "auction",
-        "eBay Category ID": "",
+        "eBay SEO Title": "",
+        "eBay Category Suggestion": "",
+        "eBay Item Specifics": "{}",
+        "Etsy Tags": "",
+        "Etsy Materials": "",
         "Etsy Taxonomy ID": "",
         "Publish to eBay": "",
         "Publish to Etsy": "",
@@ -259,7 +263,11 @@ def form_from_request(seller_notes: str = "") -> dict[str, str]:
         "Consigner #": request.form.get("Consigner #", "").strip(),
         "Shipping Available": request.form.get("Shipping Available", "").strip(),
         "Listing Strategy": request.form.get("Listing Strategy", "auction").strip(),
-        "eBay Category ID": request.form.get("eBay Category ID", "").strip(),
+        "eBay SEO Title": request.form.get("eBay SEO Title", "").strip(),
+        "eBay Category Suggestion": request.form.get("eBay Category Suggestion", "").strip(),
+        "eBay Item Specifics": request.form.get("eBay Item Specifics", "{}").strip(),
+        "Etsy Tags": request.form.get("Etsy Tags", "").strip(),
+        "Etsy Materials": request.form.get("Etsy Materials", "").strip(),
         "Etsy Taxonomy ID": request.form.get("Etsy Taxonomy ID", "").strip(),
         "Publish to eBay": request.form.get("Publish to eBay", "").strip(),
         "Publish to Etsy": request.form.get("Publish to Etsy", "").strip(),
@@ -277,6 +285,19 @@ def form_from_option(option: dict, seller_notes: str = "") -> dict[str, str]:
     form["Keywords"] = str(option.get("keywords", "")).strip()
     form["Category"] = str(option.get("category", "Other")).strip() or "Other"
     form["Item Notes"] = seller_notes
+    
+    platform_data = option.get("platform_data", {})
+    if platform_data:
+        ebay = platform_data.get("ebay", {})
+        form["eBay SEO Title"] = str(ebay.get("seo_title", "")).strip()
+        form["eBay Category Suggestion"] = str(ebay.get("category_suggestion", "")).strip()
+        form["eBay Item Specifics"] = json.dumps(ebay.get("item_specifics", {}))
+        
+        etsy = platform_data.get("etsy", {})
+        form["Etsy Tags"] = ", ".join(etsy.get("tags", [])) if isinstance(etsy.get("tags"), list) else ""
+        form["Etsy Materials"] = ", ".join(etsy.get("materials", [])) if isinstance(etsy.get("materials"), list) else ""
+        form["Etsy Taxonomy ID"] = str(etsy.get("taxonomy_id", "")).strip()
+        
     return form
 
 def form_from_saved_item(record: dict[str, str]) -> dict[str, str]:

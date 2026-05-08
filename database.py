@@ -881,10 +881,15 @@ def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: s
         "listing_strategy": form.get("Listing Strategy", "auction"),
         "platform_data": json.dumps({
             "ebay_category_id": form.get("eBay Category ID", ""),
+            "ebay_seo_title": form.get("eBay SEO Title", ""),
+            "ebay_category_suggestion": form.get("eBay Category Suggestion", ""),
+            "ebay_item_specifics": form.get("eBay Item Specifics", "{}"),
             "etsy_taxonomy_id": form.get("Etsy Taxonomy ID", ""),
+            "etsy_tags": form.get("Etsy Tags", ""),
+            "etsy_materials": form.get("Etsy Materials", ""),
             "publish_to_ebay": form.get("Publish to eBay", "") == "yes",
             "publish_to_etsy": form.get("Publish to Etsy", "") == "yes",
-        }) if form.get("Listing Strategy") == "retail" else "",
+        }) if form.get("Listing Strategy") != "auction" else "",
     }
 
 
