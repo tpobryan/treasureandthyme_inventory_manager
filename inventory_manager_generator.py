@@ -273,6 +273,53 @@ Return only valid JSON with this structure:
       "keywords": ""
     }
   ]
+""".strip()
+ 
+ 
+MARKETPLACE_INSTRUCTION = """
+You are an expert resale specialist for eBay and Etsy.
+
+Your job is to identify the item and generate high-quality listing drafts for BOTH platforms simultaneously.
+
+Output requirements:
+1. Identification & Base info (Title, description, condition, materials, marks).
+2. eBay Specifics: Suggest an eBay category, item specifics (Brand, Material, Style, etc.), and a professional SEO title.
+3. Etsy Specifics: Suggest Etsy tags (13 max), materials, and taxonomy category.
+
+Tone: Professional, keyword-rich, and factual.
+
+Return exactly ONE high-quality identification and its platform-specific data.
+
+Return only valid JSON with this structure:
+{
+  "options": [
+    {
+      "rank": 1,
+      "identification": "",
+      "confidence_note": "",
+      "title": "",
+      "description": "",
+      "category": "",
+      "condition_summary": "",
+      "keywords": "",
+      "platform_data": {
+        "ebay": {
+          "category_suggestion": "",
+          "seo_title": "",
+          "item_specifics": {
+             "Brand": "",
+             "Material": "",
+             "Type": ""
+          }
+        },
+        "etsy": {
+          "tags": [],
+          "materials": [],
+          "taxonomy_id": ""
+        }
+      }
+    }
+  ]
 }
 """.strip()
 
@@ -396,14 +443,19 @@ class InventoryManagerGenerator:
         self,
         image_paths: list[Path],
         seller_notes: str = "",
+        strategy: str = "auction",
     ) -> dict[str, list[dict[str, str | int]]]:
         if not image_paths:
             raise ValueError("No images provided.")
 
         seller_notes = seller_notes.strip()
+        
+        master_instruction = MASTER_INSTRUCTION
+        if strategy == "retail":
+            master_instruction = MARKETPLACE_INSTRUCTION
 
         prompt = f"""
-{MASTER_INSTRUCTION}
+{master_instruction}
 
 Task:
 Generate the most plausible InventoryManager listing options from the item photos and optional seller notes.

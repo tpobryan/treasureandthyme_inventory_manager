@@ -109,6 +109,7 @@ def analyze():
 
     uploaded_files = request.files.getlist("photos")
     seller_notes = request.form.get("seller_notes", "").strip()
+    strategy = request.form.get("strategy", "auction")
 
     temp_id, saved_files = save_uploaded_files(uploaded_files)
 
@@ -117,7 +118,7 @@ def analyze():
         return redirect(url_for("main.index"))
 
     try:
-        ai_data = generator.generate_options(saved_files, seller_notes=seller_notes)
+        ai_data = generator.generate_options(saved_files, seller_notes=seller_notes, strategy=strategy)
         options = ai_data.get("options", [])
         if not options:
             raise ValueError("No listing options were returned.")
