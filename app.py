@@ -77,7 +77,7 @@ def protect_csrf():
         return None
     if not app.config.get("WTF_CSRF_ENABLED", True):
         return None
-    if request.endpoint == "healthz":
+    if request.endpoint == "healthz" or request.path.startswith("/api/"):
         return None
     if validate_csrf_token(request.form.get("csrf_token", "")):
         return None
