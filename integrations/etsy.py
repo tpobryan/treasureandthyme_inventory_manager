@@ -13,8 +13,23 @@ class EtsyIntegration(PlatformIntegration):
 
     def __init__(self):
         self.client_id = os.getenv("ETSY_KEY_STRING", "")
+        self.shared_secret = os.getenv("ETSY_SHARED_SECRET", "")
         self.redirect_uri = os.getenv("ETSY_REDIRECT_URI", "http://localhost:5005/api/integrations/etsy/connect")
         self.api_base = "https://openapi.etsy.com/v3"
+
+    def _get_headers(self, access_token: str = None) -> Dict[str, str]:
+        """Helper to generate Etsy API headers."""
+        # Etsy v3 often requires keystring:shared_secret for certain endpoints
+        api_key = self.client_id
+        if self.shared_secret:
+            api_key = f"{self.client_id}:{self.shared_secret}"
+            
+        headers = {
+            "x-api-key": api_key
+        }
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+        return headers
 
     @property
     def platform_id(self) -> str:
@@ -104,15 +119,11 @@ class EtsyIntegration(PlatformIntegration):
 
     def _get_shop_id(self, access_token: str) -> str:
         """Helper to fetch shop_id for the authenticated user."""
-        headers = {
-            "x-api-key": self.client_id,
-            "Authorization": f"Bearer {access_token}"
-        }
+        headers = self._get_headers(access_token)
         # First try getMe
         response = requests.get(f"{self.api_base}/application/users/me", headers=headers)
         if response.status_code == 200:
             data = response.json()
-            # If the user has a shop, it will be in the response or we might need to call shops
             user_id = data.get("user_id")
             
             # Now get shops for this user
@@ -129,10 +140,7 @@ class EtsyIntegration(PlatformIntegration):
         if not shop_id:
             return []
             
-        headers = {
-            "x-api-key": self.client_id,
-            "Authorization": f"Bearer {access_token}"
-        }
+        headers = self._get_headers(access_token)
         
         # Get active listings
         url = f"{self.api_base}/application/shops/{shop_id}/listings/active"
