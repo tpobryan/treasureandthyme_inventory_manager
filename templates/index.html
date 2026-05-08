@@ -900,6 +900,9 @@
       const sellerNotes = sellerNotesInput.value || "";
       formData.append("seller_notes", sellerNotes);
 
+      const strategy = strategySelect.value || "auction";
+      formData.append("strategy", strategy);
+
       const csrfInput = analyzeForm.querySelector('input[name="csrf_token"]');
       if (csrfInput) {
         formData.append("csrf_token", csrfInput.value);
