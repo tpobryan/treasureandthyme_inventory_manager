@@ -1062,6 +1062,36 @@
               <div style="background: #fffcf5; padding: 16px; border-radius: 12px; border: 1px solid #fed7aa; margin-bottom: 14px;">
                 <label style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #9a3412; margin-bottom: 16px; cursor: pointer;">
                   <input type="checkbox" name="Publish to Etsy" value="yes" {% if form.get('Publish to Etsy') == 'yes' %}checked{% endif %}>
+                  Publish to Etsy Shop
+                </label>
+
+                <div class="field">
+                  <label for="Etsy Tags">Etsy Tags (Comma separated, max 13)</label>
+                  <textarea id="Etsy Tags" name="Etsy Tags" rows="2">{{ form.get('Etsy Tags', '') }}</textarea>
+                </div>
+
+                <div class="field">
+                  <label for="Etsy Materials">Etsy Materials (Comma separated)</label>
+                  <textarea id="Etsy Materials" name="Etsy Materials" rows="2">{{ form.get('Etsy Materials', '') }}</textarea>
+                </div>
+
+                <div class="field">
+                  <label for="Etsy Taxonomy ID">Taxonomy ID</label>
+                  <input type="text" id="Etsy Taxonomy ID" name="Etsy Taxonomy ID" value="{{ form.get('Etsy Taxonomy ID', '') }}" placeholder="Enter Taxonomy ID to publish">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="button-row" style="margin-top: 24px;">
+            <button type="submit" id="saveButton" name="action" value="save">Save to Database</button>
+            <button type="button" class="secondary" id="reviseOpenBtn">Revise with AI</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
     const reviseForm = document.getElementById("reviseForm");
     const reviseButton = document.getElementById("reviseButton");
