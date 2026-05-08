@@ -387,7 +387,7 @@ def _build_image_content(image_paths: list[Path]) -> list[dict[str, str]]:
     return content
 
 
-def _normalize_option(opt: dict[str, Any], rank: int) -> dict[str, str | int]:
+def _normalize_option(opt: dict[str, Any], rank: int) -> dict[str, Any]:
     return {
         "rank": rank,
         "identification": str(opt.get("identification", "")).strip(),
@@ -399,6 +399,7 @@ def _normalize_option(opt: dict[str, Any], rank: int) -> dict[str, str | int]:
         "category": str(opt.get("category", "Other")).strip() or "Other",
         "condition_summary": str(opt.get("condition_summary", "")).strip(),
         "keywords": str(opt.get("keywords", "")).strip(),
+        "platform_data": opt.get("platform_data", {})
     }
 
 
@@ -414,6 +415,7 @@ def _blank_option(rank: int) -> dict[str, str | int]:
         "category": "Other",
         "condition_summary": "",
         "keywords": "",
+        "platform_data": {}
     }
 
 
