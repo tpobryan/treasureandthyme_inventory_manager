@@ -50,9 +50,21 @@ def connect_integration(platform_id):
     # For now, we will just call the authenticate method which might return a URL
     # or handle the callback args.
     
-    auth_result = integration.authenticate(request.args)
+    from flask import session
+    
+    # Check if we have session data for the callback
+    session_data = {
+        "state": session.get(f"{platform_id}_oauth_state"),
+        "verifier": session.get(f"{platform_id}_oauth_verifier")
+    }
+    
+    auth_result = integration.authenticate(request.args, session_data=session_data)
     
     if "redirect_url" in auth_result:
+        # Save PKCE codes for the callback
+        if "pkce" in auth_result:
+            session[f"{platform_id}_oauth_state"] = auth_result["pkce"]["state"]
+            session[f"{platform_id}_oauth_verifier"] = auth_result["pkce"]["verifier"]
         return redirect(auth_result["redirect_url"])
         
     if "error" in auth_result:
@@ -92,5 +104,47 @@ def connect_integration(platform_id):
             )
         connection.commit()
         return jsonify({"status": "success", "message": f"Connected to {platform_id}"})
+    finally:
+        connection.close()
+
+@integrations_bp.route("/api/integrations/<platform_id>/sync", methods=["POST"])
+def sync_integration(platform_id):
+    """Fetch current listings from the platform and update local status."""
+    if platform_id not in PLATFORMS:
+        return jsonify({"error": f"Platform {platform_id} not supported"}), 404
+        
+    integration = PLATFORMS[platform_id]
+    
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT access_token, refresh_token, settings_json FROM integrations WHERE platform_id = %s" if dialect == "mysql" else "SELECT access_token, refresh_token, settings_json FROM integrations WHERE platform_id = ?",
+            (platform_id,)
+        )
+        row = cursor.fetchone()
+        
+        if not row:
+            return jsonify({"error": f"{platform_id} is not connected"}), 400
+            
+        access_token = row["access_token"]
+        settings = json.loads(row["settings_json"] or "{}")
+        
+        # Call fetch_listings (Specific to Etsy for now, but we can generalize later)
+        if hasattr(integration, 'fetch_listings'):
+            listings = integration.fetch_listings(access_token, settings.get("shop_id"))
+            
+            # Here we would update our local database with these listings
+            # For now, just return the count as a proof of concept
+            return jsonify({
+                "status": "success", 
+                "platform_id": platform_id,
+                "listings_count": len(listings),
+                "listings": listings[:5] # Return first 5 for verification
+            })
+        else:
+            return jsonify({"error": "Sync not implemented for this platform"}), 501
+            
     finally:
         connection.close()

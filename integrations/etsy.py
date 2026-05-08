@@ -1,6 +1,9 @@
-from typing import Any, Dict
 import os
 import requests
+import hashlib
+import base64
+import secrets
+from typing import Any, Dict
 from integrations.base import PlatformIntegration
 
 class EtsyIntegration(PlatformIntegration):
@@ -10,62 +13,154 @@ class EtsyIntegration(PlatformIntegration):
 
     def __init__(self):
         self.client_id = os.getenv("ETSY_KEY_STRING", "")
+        self.redirect_uri = os.getenv("ETSY_REDIRECT_URI", "http://localhost:5005/api/integrations/etsy/connect")
         self.api_base = "https://openapi.etsy.com/v3"
 
     @property
     def platform_id(self) -> str:
         return "etsy"
 
-    def authenticate(self, request_args: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        In a real scenario, this handles the OAuth2 callback by exchanging the 
-        authorization code for an access token.
-        For now, this returns a placeholder or redirects if no code is present.
-        """
-        code = request_args.get("code")
-        if not code:
-            # Generate the auth URL and instruct the user to visit it
-            # Mock redirect URL for now
-            return {"redirect_url": "https://www.etsy.com/oauth/connect?response_type=code&client_id=" + self.client_id}
-            
-        # Mocking the token exchange
+    def generate_pkce_codes(self) -> Dict[str, str]:
+        """Generates PKCE code_verifier and code_challenge."""
+        # Generate a random verifier
+        token = secrets.token_urlsafe(32)
+        
+        # Generate challenge (SHA256 hash of verifier)
+        sha256_hash = hashlib.sha256(token.encode('utf-8')).digest()
+        challenge = base64.urlsafe_b64encode(sha256_hash).decode('utf-8').replace('=', '')
+        
         return {
-            "access_token": "mock_etsy_access_token",
-            "refresh_token": "mock_etsy_refresh_token",
-            "settings": {"shop_id": "123456"}
+            "verifier": token,
+            "challenge": challenge,
+            "state": secrets.token_urlsafe(16)
         }
 
-    def publish_listing(self, lot_number: int, item_data: Dict[str, Any]) -> str:
+    def authenticate(self, request_args: Dict[str, Any], session_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Publishes the listing to Etsy.
-        Expects item_data to contain title, description, price, etc.
+        Handles the OAuth2 flow. 
+        If 'code' is missing, returns a redirect URL.
+        If 'code' is present, exchanges it for tokens.
         """
-        # In a real app, this would use requests.post() to the Etsy API
-        print(f"[Etsy] Publishing lot {lot_number}: {item_data.get('title')}")
+        code = request_args.get("code")
+        state = request_args.get("state")
+
+        if not code:
+            # Phase 1: Generate codes and return redirect URL
+            pkce = self.generate_pkce_codes()
+            # Added shops_r to get shop_id later
+            scope = 'listings_r listings_w shops_r'
+            
+            auth_url = (
+                f"https://www.etsy.com/oauth/connect?"
+                f"response_type=code&"
+                f"redirect_uri={self.redirect_uri}&"
+                f"scope={scope}&"
+                f"client_id={self.client_id}&"
+                f"state={pkce['state']}&"
+                f"code_challenge={pkce['challenge']}&"
+                f"code_challenge_method=S256"
+            )
+            
+            return {
+                "redirect_url": auth_url,
+                "pkce": pkce
+            }
+            
+        # Phase 2: Exchange code for token
+        if not session_data or state != session_data.get("state"):
+            return {"error": "Invalid state parameter"}
+
+        verifier = session_data.get("verifier")
         
-        # Mock remote ID
+        response = requests.post(
+            "https://api.etsy.com/v3/public/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": self.client_id,
+                "redirect_uri": self.redirect_uri,
+                "code": code,
+                "code_verifier": verifier,
+            }
+        )
+
+        if response.status_code == 200:
+            token_data = response.json()
+            access_token = token_data.get("access_token")
+            refresh_token = token_data.get("refresh_token")
+            
+            # Step 3: Get Shop ID
+            shop_id = self._get_shop_id(access_token)
+            
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "settings": {
+                    "shop_id": shop_id,
+                    "user_id": access_token.split('.')[0]
+                }
+            }
+        else:
+            return {"error": f"Token exchange failed: {response.text}"}
+
+    def _get_shop_id(self, access_token: str) -> str:
+        """Helper to fetch shop_id for the authenticated user."""
+        headers = {
+            "x-api-key": self.client_id,
+            "Authorization": f"Bearer {access_token}"
+        }
+        # First try getMe
+        response = requests.get(f"{self.api_base}/application/users/me", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            # If the user has a shop, it will be in the response or we might need to call shops
+            user_id = data.get("user_id")
+            
+            # Now get shops for this user
+            shop_response = requests.get(f"{self.api_base}/application/users/{user_id}/shops", headers=headers)
+            if shop_response.status_code == 200:
+                shops = shop_response.json()
+                if shops.get("count", 0) > 0:
+                    return str(shops["results"][0]["shop_id"])
+        
+        return ""
+
+    def fetch_listings(self, access_token: str, shop_id: str) -> list[Dict[str, Any]]:
+        """Fetches active listings from the Etsy shop."""
+        if not shop_id:
+            return []
+            
+        headers = {
+            "x-api-key": self.client_id,
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        # Get active listings
+        url = f"{self.api_base}/application/shops/{shop_id}/listings/active"
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            return response.json().get("results", [])
+        else:
+            print(f"[Etsy] Failed to fetch listings: {response.text}")
+            return []
+
+    def publish_listing(self, lot_number: int, item_data: Dict[str, Any]) -> str:
+        """Publishes the listing to Etsy."""
+        print(f"[Etsy] Publishing lot {lot_number}: {item_data.get('title')}")
         return f"etsy_{lot_number}_123"
 
     def update_listing(self, lot_number: int, remote_id: str, item_data: Dict[str, Any]) -> bool:
-        """
-        Updates an existing listing on Etsy.
-        """
+        """Updates an existing listing on Etsy."""
         print(f"[Etsy] Updating listing {remote_id} for lot {lot_number}")
         return True
 
     def delete_listing(self, lot_number: int, remote_id: str) -> bool:
-        """
-        Deletes or ends the listing on Etsy.
-        """
+        """Deletes or ends the listing on Etsy."""
         print(f"[Etsy] Deleting listing {remote_id} for lot {lot_number}")
         return True
 
     def handle_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Parses Etsy's webhook payload (e.g. shop_receipt) to extract sales.
-        """
-        # For mock purposes, assume payload contains a receipt with a listing_id
-        # that correlates to our remote_id
+        """Parses Etsy's webhook payload."""
         return {
             "event_type": "sale",
             "platform_id": self.platform_id,
