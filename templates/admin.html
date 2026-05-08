@@ -213,8 +213,46 @@
               {% if etsy_connected %}Reconnect Etsy{% else %}Connect Etsy{% endif %}
             </a>
           </div>
+          {% if etsy_connected %}
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f1641e22;">
+              <button id="sync-etsy-btn" class="button-link" style="background: #4b2c20; width: auto; cursor: pointer;">
+                Sync Etsy Inventory
+              </button>
+              <div id="sync-status" style="margin-top: 10px; font-size: 0.9em; display: none;"></div>
+            </div>
+          {% endif %}
         </div>
       </div>
+
+      <script>
+        document.getElementById('sync-etsy-btn')?.addEventListener('click', async () => {
+          const statusDiv = document.getElementById('sync-status');
+          statusDiv.style.display = 'block';
+          statusDiv.style.color = '#4b2c20';
+          statusDiv.innerText = 'Syncing...';
+          
+          try {
+            const response = await fetch('/api/integrations/etsy/sync', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+              statusDiv.style.color = '#10b981';
+              statusDiv.innerText = `Success! Found ${data.listings_count} active listings.`;
+            } else {
+              statusDiv.style.color = '#ef4444';
+              statusDiv.innerText = `Error: ${data.error || 'Unknown error'}`;
+            }
+          } catch (err) {
+            statusDiv.style.color = '#ef4444';
+            statusDiv.innerText = `Error: ${err.message}`;
+          }
+        });
+      </script>
 
       <div class="danger-section" style="margin-top: 0; border-top: none; padding-top: 0;">
         <div class="danger-card" style="border-color: #93c5fd; background: #eff6ff;">
