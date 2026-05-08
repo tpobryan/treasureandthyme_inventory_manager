@@ -317,7 +317,7 @@ REQUIRED JSON STRUCTURE:
 Ensure the eBay SEO title is catchy and max 80 characters.
 Ensure Etsy tags are relevant for handmade/vintage/supplies search.
 """
-.strip()
+MARKETPLACE_INSTRUCTION = MARKETPLACE_INSTRUCTION.strip()
 
 
 def _guess_mime_type(path: Path) -> str:
