@@ -120,13 +120,15 @@ class EtsyIntegration(PlatformIntegration):
     def _get_shop_id(self, access_token: str) -> str:
         """Helper to fetch shop_id for the authenticated user."""
         headers = self._get_headers(access_token)
-        # First try getMe
+        # First try getMe - this often returns shop_id directly in v3
         response = requests.get(f"{self.api_base}/application/users/me", headers=headers)
         if response.status_code == 200:
             data = response.json()
+            if data.get("shop_id"):
+                return str(data["shop_id"])
+                
             user_id = data.get("user_id")
-            
-            # Now get shops for this user
+            # Fallback to fetching shops if not in getMe
             shop_response = requests.get(f"{self.api_base}/application/users/{user_id}/shops", headers=headers)
             if shop_response.status_code == 200:
                 shops = shop_response.json()

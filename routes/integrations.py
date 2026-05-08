@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, redirect, url_for
 from database import connect_item_store, ensure_item_store_ready
 import json
 import logging
+import requests
 from integrations.etsy import EtsyIntegration
 
 integrations_bp = Blueprint("integrations", __name__)
@@ -145,6 +146,51 @@ def sync_integration(platform_id):
             })
         else:
             return jsonify({"error": "Sync not implemented for this platform"}), 501
+            
+    finally:
+        connection.close()
+
+@integrations_bp.route("/api/integrations/<platform_id>/test", methods=["GET"])
+def test_integration(platform_id):
+    """Test the API connection by fetching basic shop info."""
+    if platform_id not in PLATFORMS:
+        return jsonify({"error": f"Platform {platform_id} not supported"}), 404
+        
+    integration = PLATFORMS[platform_id]
+    
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT access_token, settings_json FROM integrations WHERE platform_id = %s" if dialect == "mysql" else "SELECT access_token, settings_json FROM integrations WHERE platform_id = ?",
+            (platform_id,)
+        )
+        row = cursor.fetchone()
+        
+        if not row:
+            return jsonify({"error": f"{platform_id} is not connected"}), 400
+            
+        access_token = row["access_token"]
+        settings = json.loads(row["settings_json"] or "{}")
+        shop_id = settings.get("shop_id")
+        
+        # Simple test call: Get Shop info
+        headers = integration._get_headers(access_token)
+        url = f"{integration.api_base}/application/shops/{shop_id}"
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            return jsonify({
+                "status": "success",
+                "message": f"Successfully connected to Etsy shop: {response.json().get('shop_name')}",
+                "data": response.json()
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": f"API call failed: {response.text}"
+            }), response.status_code
             
     finally:
         connection.close()
