@@ -194,6 +194,28 @@
         <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Generator</a>
       </div>
 
+      <div class="danger-section" style="margin-top: 0; border-top: none; padding-top: 0; margin-bottom: 30px;">
+        <div class="danger-card" style="border-color: #f1641e; background: #fffcf9;">
+          <p class="danger-title" style="color: #f1641e;">Etsy Integration</p>
+          <p class="danger-copy" style="color: #4b2c20;">
+            Connect your Etsy shop to allow publishing listings directly from the generator.
+          </p>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              Status: 
+              {% if etsy_connected %}
+                <strong style="color: #10b981;">Connected</strong>
+              {% else %}
+                <strong style="color: #6b7280;">Not Connected</strong>
+              {% endif %}
+            </div>
+            <a href="{{ url_for('integrations.connect_integration', platform_id='etsy') }}" class="button-link" style="background: #f1641e; width: auto;">
+              {% if etsy_connected %}Reconnect Etsy{% else %}Connect Etsy{% endif %}
+            </a>
+          </div>
+        </div>
+      </div>
+
       <div class="danger-section" style="margin-top: 0; border-top: none; padding-top: 0;">
         <div class="danger-card" style="border-color: #93c5fd; background: #eff6ff;">
           <p class="danger-title" style="color: #1d4ed8;">Upload FTP Photos By Lot Number</p>

@@ -11,14 +11,26 @@ from database import (
     record_ftp_upload,
     delete_ftp_upload_record,
     current_auction_number_for_upload,
+    connect_item_store,
+    ensure_item_store_ready
 )
-from utils import UPLOADS_DIR
 
 admin_bp = Blueprint("admin", __name__)
 
 @admin_bp.route("/admin", methods=["GET"])
 def admin():
-    return render_template("admin.html")
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    etsy_connected = False
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SELECT 1 FROM integrations WHERE platform_id = 'etsy'")
+            etsy_connected = bool(cursor.fetchone())
+        finally:
+            connection.close()
+            
+    return render_template("admin.html", etsy_connected=etsy_connected)
 
 @admin_bp.route("/delete_remote_upload", methods=["POST"])
 def delete_remote_upload():
