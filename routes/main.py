@@ -123,7 +123,7 @@ def analyze():
         if not options:
             raise ValueError("No listing options were returned.")
         selected = options[0]
-        form = form_from_option(selected, seller_notes=seller_notes)
+        form = form_from_option(selected, seller_notes=seller_notes, strategy=strategy)
         current_app.logger.info("Generated %s options", len(options))
     except Exception as exc:
         current_app.logger.exception("AI analysis failed")

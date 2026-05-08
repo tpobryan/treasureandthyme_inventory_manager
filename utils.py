@@ -273,8 +273,9 @@ def form_from_request(seller_notes: str = "") -> dict[str, str]:
         "Publish to Etsy": request.form.get("Publish to Etsy", "").strip(),
     }
 
-def form_from_option(option: dict, seller_notes: str = "") -> dict[str, str]:
+def form_from_option(option: dict, seller_notes: str = "", strategy: str = "auction") -> dict[str, str]:
     form = blank_form(seller_notes=seller_notes)
+    form["Listing Strategy"] = strategy
     form["Identification"] = str(option.get("identification", "")).strip()
     form["Confidence Note"] = str(option.get("confidence_note", "")).strip()
     form["Material Notes"] = str(option.get("material_notes", "")).strip()

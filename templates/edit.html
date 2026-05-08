@@ -1152,25 +1152,45 @@
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
       
-      document.getElementById('tab-' + tabId).classList.add('active');
-      event.target.classList.add('active');
+      const targetTab = document.getElementById('tab-' + tabId);
+      if (targetTab) targetTab.classList.add('active');
+
+      const btns = document.querySelectorAll('.tab-btn');
+      btns.forEach(btn => {
+        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("'" + tabId + "'")) {
+          btn.classList.add('active');
+        }
+      });
     }
 
     function updateStrategyUI() {
-      const strategy = document.getElementById('Listing Strategy').value;
+      const strategySelect = document.getElementById('Listing Strategy');
+      if (!strategySelect) return;
+
+      const strategy = strategySelect.value;
       const auctionTabBtn = document.getElementById('auctionTabBtn');
       
       if (strategy === 'retail' || strategy === 'inventory') {
-        auctionTabBtn.style.display = 'none';
-        // If we were on the auction tab, switch to base
-        if (document.getElementById('tab-auction').classList.contains('active')) {
+        if (auctionTabBtn) auctionTabBtn.style.display = 'none';
+        const auctionTab = document.getElementById('tab-auction');
+        if (auctionTab && auctionTab.classList.contains('active')) {
           showTab('base');
-          document.querySelector('.tab-btn[onclick="showTab(\'base\')"]').classList.add('active');
         }
       } else {
-        auctionTabBtn.style.display = 'inline-block';
+        if (auctionTabBtn) auctionTabBtn.style.display = 'inline-block';
       }
     }
+
+    // Initialize UI state
+    document.addEventListener('DOMContentLoaded', () => {
+      updateStrategyUI();
+      // Ensure the correct tab button is highlighted for the active tab on load
+      const activeTab = document.querySelector('.tab-content.active');
+      if (activeTab) {
+        const tabId = activeTab.id.replace('tab-', '');
+        showTab(tabId);
+      }
+    });
 
     // Initialize UI state
     document.addEventListener('DOMContentLoaded', () => {
