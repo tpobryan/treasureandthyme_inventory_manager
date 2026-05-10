@@ -263,6 +263,22 @@ class EtsyIntegration(PlatformIntegration):
             "shipping_profile_id": int(data.get("Etsy Shipping Profile ID") or etsy_data.get("shipping_profile_id", 0)),
             "state": "draft"
         }
+        
+        # Try to get a default readiness_state_id if not provided
+        # Readiness states are required for physical items in v3
+        readiness_url = f"{self.api_base}/application/shops/{shop_id}/readiness-state-definitions"
+        read_res = requests.get(readiness_url, headers=headers)
+        if read_res.status_code == 200:
+            read_data = read_res.json()
+            if read_data.get("count", 0) > 0:
+                # Use the first one found as a safe default
+                payload["readiness_state_id"] = read_data["results"][0]["readiness_state_id"]
+                current_app.logger.info("[Etsy] Using readiness_state_id: %s", payload["readiness_state_id"])
+        
+        if "readiness_state_id" not in payload:
+            # Fallback to the one we saw in diagnostics if fetch failed
+            payload["readiness_state_id"] = 1404242012765
+            current_app.logger.info("[Etsy] Using fallback readiness_state_id: 1404242012765")
 
         # Materials and Tags (optional but recommended)
         materials = data.get("Etsy Materials") or etsy_data.get("materials", [])
