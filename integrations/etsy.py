@@ -161,6 +161,9 @@ class EtsyIntegration(PlatformIntegration):
         current_app.logger.info("[Etsy] Fetching shipping profiles from: %s", url)
         
         response = requests.get(url, headers=headers)
+        current_app.logger.info("[Etsy] Response Status: %d", response.status_code)
+        current_app.logger.info("[Etsy] Raw Response: %s", response.text)
+        
         if response.status_code == 200:
             profiles = response.json().get("results", [])
             current_app.logger.info("[Etsy] Successfully fetched %d shipping profiles", len(profiles))
