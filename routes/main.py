@@ -86,11 +86,13 @@ def render_edit_page(
 @main_bp.route("/", methods=["GET"])
 def index():
     active_draft = get_active_draft()
+    last_strategy = session.get("last_strategy", "auction")
     return render_template(
         "index.html",
         next_lot=get_next_lot_preview(),
         active_draft=active_draft,
         orphaned_drafts=get_orphaned_drafts(),
+        last_strategy=last_strategy,
     )
 
 @main_bp.route("/dashboard", methods=["GET"])
@@ -111,6 +113,7 @@ def analyze():
     uploaded_files = request.files.getlist("photos")
     seller_notes = request.form.get("seller_notes", "").strip()
     strategy = request.form.get("strategy", "auction")
+    session["last_strategy"] = strategy
 
     temp_id, saved_files = save_uploaded_files(uploaded_files)
 

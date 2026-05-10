@@ -546,9 +546,9 @@
         <div class="field" style="margin-bottom: 24px; padding: 16px; background: #fdfcf9; border: 1px solid #e8e4db; border-radius: 12px;">
           <label for="strategy">Selling Strategy</label>
           <select id="strategy" name="strategy" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: #fff; font: inherit;">
-            <option value="auction" selected>Auction Path (AuctionNinja)</option>
-            <option value="retail">Marketplace Path (eBay & Etsy)</option>
-            <option value="inventory">Inventory Only (Drafting only)</option>
+            <option value="auction" {% if last_strategy == 'auction' %}selected{% endif %}>Auction Path (AuctionNinja)</option>
+            <option value="retail" {% if last_strategy == 'retail' %}selected{% endif %}>Marketplace Path (eBay & Etsy)</option>
+            <option value="inventory" {% if last_strategy == 'inventory' %}selected{% endif %}>Inventory Only (Drafting only)</option>
           </select>
           <div class="help">
             Choose how you want the AI to draft this item.
@@ -710,6 +710,8 @@
       if (auctionDetailsPanel) auctionDetailsPanel.style.display = isAuction ? "flex" : "none";
       if (auctionButtons) auctionButtons.style.display = isAuction ? "flex" : "none";
     });
+    // Trigger on load
+    strategySelect?.dispatchEvent(new Event("change"));
 
     let selectedFiles = [];
     const previewUrls = new Map();
