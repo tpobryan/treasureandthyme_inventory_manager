@@ -223,6 +223,7 @@ def blank_form(seller_notes: str = "") -> dict[str, str]:
         "Etsy When Made": "2020_2026",
         "Etsy Is Supply": "no",
         "Price": "0.00",
+        "Price Rationale": "",
         "Quantity": "1",
         "Publish to eBay": "no",
         "Publish to Etsy": "",
@@ -307,6 +308,7 @@ def form_from_option(option: dict, seller_notes: str = "", strategy: str = "auct
         form["Etsy When Made"] = str(etsy.get("when_made", "2020_2026")).strip()
         form["Etsy Is Supply"] = "yes" if etsy.get("is_supply") else "no"
         form["Price"] = f"{float(etsy.get('suggested_price', 0.0)):.2f}"
+        form["Price Rationale"] = str(etsy.get("price_rationale", "")).strip()
         form["Quantity"] = str(etsy.get("suggested_quantity", 1)).strip()
         
     return form

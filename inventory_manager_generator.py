@@ -312,6 +312,7 @@ REQUIRED JSON STRUCTURE:
           "when_made": "made_to_order OR 2020_2026 OR 2010_2019 OR 2000_2009 OR 1990s OR 1980s OR 1970s OR 1960s OR 1950s OR 1940s OR 1930s OR 1920s OR 1910s OR 1900s OR 1800s OR 1700s OR before_1700",
           "is_supply": false,
           "suggested_price": 0.00,
+          "price_rationale": "Brief explanation of why this price was suggested based on brand, era, or condition",
           "suggested_quantity": 1
         }
       }

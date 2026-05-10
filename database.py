@@ -891,6 +891,7 @@ def item_record_from_form(lot_number: int, form: dict[str, str], image_folder: s
             "etsy_when_made": form.get("Etsy When Made", "2020_2026"),
             "etsy_is_supply": form.get("Etsy Is Supply", "") == "yes",
             "etsy_price": form.get("Price", "0.00"),
+            "etsy_price_rationale": form.get("Price Rationale", ""),
             "etsy_quantity": form.get("Quantity", "1"),
             "publish_to_ebay": form.get("Publish to eBay", "") == "yes",
             "publish_to_etsy": form.get("Publish to Etsy", "") == "yes",

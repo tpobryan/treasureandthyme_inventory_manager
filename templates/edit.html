@@ -978,6 +978,11 @@
                 <div class="field">
                   <label for="Price">Suggested Price ($)</label>
                   <input type="number" step="0.01" id="Price" name="Price" value="{{ form.get('Price', '0.00') }}">
+                  {% if form.get('Price Rationale') %}
+                    <div class="help" style="margin-top: 4px; font-style: italic; color: #64748b; font-size: 0.85rem; line-height: 1.3;">
+                      <strong>AI Note:</strong> {{ form.get('Price Rationale') }}
+                    </div>
+                  {% endif %}
                 </div>
                 <div class="field">
                   <label for="Quantity">Quantity</label>
