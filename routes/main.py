@@ -31,6 +31,7 @@ from database import (
     fetch_active_draft,
     fetch_recent_retail_items,
     get_platform_credentials,
+    initialize_platform_status,
 )
 from utils import (
     UPLOADS_DIR,
