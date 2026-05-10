@@ -1082,6 +1082,19 @@
                 </label>
 
                 <div class="field">
+                  <label for="Etsy Shipping Profile ID">Shipping Profile</label>
+                  <select id="Etsy Shipping Profile ID" name="Etsy Shipping Profile ID">
+                    <option value="0">-- Select a Profile --</option>
+                    {% for profile in etsy_shipping_profiles %}
+                      <option value="{{ profile.shipping_profile_id }}" {% if form.get('Etsy Shipping Profile ID') == profile.shipping_profile_id|string %}selected{% endif %}>
+                        {{ profile.title }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <div class="help">Required by Etsy for physical items.</div>
+                </div>
+
+                <div class="field">
                   <label for="Etsy Tags">Etsy Tags (Comma separated, max 13)</label>
                   <textarea id="Etsy Tags" name="Etsy Tags" rows="2">{{ form.get('Etsy Tags', '') }}</textarea>
                 </div>

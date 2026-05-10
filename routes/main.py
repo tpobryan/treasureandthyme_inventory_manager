@@ -12,7 +12,7 @@ from image_processor import apply_auto_enhance
 
 from inventory_manager_generator import InventoryManagerGenerator
 from ftp_client import upload_lot_photos_to_inventory_manager
-from integrations.publisher import process_platform_publishing
+from integrations.publisher import process_platform_publishing, PLATFORMS
 from database import (
     ITEM_STATUS_READY,
     ITEM_STATUS_NEEDS_UPDATE,
@@ -29,8 +29,8 @@ from database import (
     current_auction_number_for_upload,
     append_item_record,
     fetch_active_draft,
-    initialize_platform_status,
     fetch_recent_retail_items,
+    get_platform_credentials,
 )
 from utils import (
     UPLOADS_DIR,
@@ -71,6 +71,16 @@ def render_edit_page(
         form=form,
         revision_request=revision_request,
     )
+    etsy_shipping_profiles = []
+    try:
+        creds = get_platform_credentials("etsy")
+        if creds:
+            etsy = PLATFORMS.get("etsy")
+            if etsy:
+                etsy_shipping_profiles = etsy.get_shipping_profiles(creds["access_token"], creds["settings"].get("shop_id"))
+    except Exception as exc:
+        current_app.logger.warning("Failed to fetch Etsy shipping profiles: %s", exc)
+
     return render_template(
         "edit.html",
         temp_id=temp_id,
@@ -82,6 +92,7 @@ def render_edit_page(
         revision_request=revision_request,
         options=options,
         form=form,
+        etsy_shipping_profiles=etsy_shipping_profiles,
     )
 
 @main_bp.route("/", methods=["GET"])

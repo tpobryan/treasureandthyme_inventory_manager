@@ -154,6 +154,21 @@ class EtsyIntegration(PlatformIntegration):
             print(f"[Etsy] Failed to fetch listings: {response.text}")
             return []
 
+    def get_shipping_profiles(self, access_token: str, shop_id: str) -> list[Dict[str, Any]]:
+        """Fetches available shipping profiles for the shop."""
+        if not shop_id:
+            return []
+            
+        headers = self._get_headers(access_token)
+        url = f"{self.api_base}/application/shops/{shop_id}/shipping-profiles"
+        
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json().get("results", [])
+        else:
+            print(f"[Etsy] Failed to fetch shipping profiles: {response.text}")
+            return []
+
     def publish_listing(self, lot_number: int, item_data: Dict[str, Any]) -> str:
         """
         Publishes the listing to Etsy.
@@ -206,6 +221,7 @@ class EtsyIntegration(PlatformIntegration):
             "when_made": data.get("Etsy When Made") or etsy_data.get("when_made", "2020_2026"),
             "taxonomy_id": int(data.get("Etsy Taxonomy ID") or etsy_data.get("taxonomy_id", 1)), # Default to 1 if missing
             "is_supply": (data.get("Etsy Is Supply") == "yes") or etsy_data.get("is_supply", False),
+            "shipping_profile_id": int(data.get("Etsy Shipping Profile ID") or etsy_data.get("shipping_profile_id", 0)),
             "state": "draft"
         }
 
