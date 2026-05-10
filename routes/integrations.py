@@ -4,6 +4,7 @@ import json
 import logging
 import requests
 from integrations.etsy import EtsyIntegration
+from integrations.ebay import EbayIntegration
 
 integrations_bp = Blueprint("integrations", __name__)
 logger = logging.getLogger(__name__)
@@ -11,7 +12,8 @@ logger = logging.getLogger(__name__)
 # This will map platform_id to the specific integration class instance
 # e.g., PLATFORMS = {'etsy': EtsyIntegration(), 'ebay': EbayIntegration()}
 PLATFORMS = {
-    'etsy': EtsyIntegration()
+    'etsy': EtsyIntegration(),
+    'ebay': EbayIntegration()
 }
 
 @integrations_bp.route("/api/integrations", methods=["GET"])

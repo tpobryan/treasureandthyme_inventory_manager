@@ -5,10 +5,12 @@ from typing import Any, Dict, List
 from flask import current_app
 from database import get_platform_credentials, update_platform_status
 from integrations.etsy import EtsyIntegration
+from integrations.ebay import EbayIntegration
 
 # Registry of platform integrations
 PLATFORMS = {
-    "etsy": EtsyIntegration()
+    "etsy": EtsyIntegration(),
+    "ebay": EbayIntegration()
 }
 
 def process_platform_publishing(lot_number: int, form: Dict[str, Any], image_folder: str):

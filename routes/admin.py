@@ -22,15 +22,18 @@ def admin():
     ensure_item_store_ready()
     connection, dialect = connect_item_store()
     etsy_connected = False
+    ebay_connected = False
     if connection:
         try:
             cursor = connection.cursor()
-            cursor.execute("SELECT 1 FROM integrations WHERE platform_id = 'etsy'")
-            etsy_connected = bool(cursor.fetchone())
+            cursor.execute("SELECT platform_id FROM integrations WHERE platform_id IN ('etsy', 'ebay')")
+            connected_platforms = {row["platform_id"] for row in cursor.fetchall()}
+            etsy_connected = 'etsy' in connected_platforms
+            ebay_connected = 'ebay' in connected_platforms
         finally:
             connection.close()
             
-    return render_template("admin.html", etsy_connected=etsy_connected)
+    return render_template("admin.html", etsy_connected=etsy_connected, ebay_connected=ebay_connected)
 
 @admin_bp.route("/delete_remote_upload", methods=["POST"])
 def delete_remote_upload():

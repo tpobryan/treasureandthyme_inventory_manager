@@ -222,6 +222,26 @@
             </div>
           {% endif %}
         </div>
+
+        <div class="danger-card" style="border-color: #0064d2; background: #f0f7ff; margin-top: 20px;">
+          <p class="danger-title" style="color: #0064d2;">eBay Integration</p>
+          <p class="danger-copy" style="color: #003366;">
+            Connect your eBay account to enable cross-platform drafting and photo syncing.
+          </p>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              Status: 
+              {% if ebay_connected %}
+                <strong style="color: #10b981;">Connected</strong>
+              {% else %}
+                <strong style="color: #6b7280;">Not Connected</strong>
+              {% endif %}
+            </div>
+            <a href="{{ url_for('integrations.connect_integration', platform_id='ebay') }}" class="button-link" style="background: #0064d2; width: auto;">
+              {% if ebay_connected %}Reconnect eBay{% else %}Connect eBay{% endif %}
+            </a>
+          </div>
+        </div>
       </div>
 
       <script>
