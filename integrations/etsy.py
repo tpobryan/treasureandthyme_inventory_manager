@@ -20,13 +20,8 @@ class EtsyIntegration(PlatformIntegration):
 
     def _get_headers(self, access_token: str = None) -> Dict[str, str]:
         """Helper to generate Etsy API headers."""
-        # Etsy v3 often requires keystring:shared_secret for certain endpoints
-        api_key = self.client_id
-        if self.shared_secret:
-            api_key = f"{self.client_id}:{self.shared_secret}"
-            
         headers = {
-            "x-api-key": api_key
+            "x-api-key": self.client_id
         }
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
