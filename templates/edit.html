@@ -1089,6 +1089,8 @@
                       <option value="{{ profile.shipping_profile_id }}" {% if form.get('Etsy Shipping Profile ID') == profile.shipping_profile_id|string %}selected{% endif %}>
                         {{ profile.title }}
                       </option>
+                    {% else %}
+                      <option disabled>No profiles found. Try reconnecting Etsy in Admin.</option>
                     {% endfor %}
                   </select>
                   <div class="help">Required by Etsy for physical items.</div>
