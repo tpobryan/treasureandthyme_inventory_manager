@@ -424,11 +424,14 @@ def save():
     append_item_record(record)
     
     platforms_to_publish = []
+    current_app.logger.info("[Save] Listing Strategy: %s", form.get("Listing Strategy"))
     if form.get("Listing Strategy") == "retail":
         if form.get("Publish to eBay") == "yes":
             platforms_to_publish.append("ebay")
         if form.get("Publish to Etsy") == "yes":
             platforms_to_publish.append("etsy")
+            
+    current_app.logger.info("[Save] Platforms to publish: %s", platforms_to_publish)
             
     if platforms_to_publish:
         initialize_platform_status(csv_lot_number, platforms_to_publish)
