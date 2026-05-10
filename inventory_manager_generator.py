@@ -307,7 +307,12 @@ REQUIRED JSON STRUCTURE:
         "etsy": {
           "tags": ["tag1", "tag2", "...up to 13"],
           "materials": ["mat1", "mat2"],
-          "taxonomy_id": "Numerical ID if known, otherwise leave empty"
+          "taxonomy_id": "Numerical ID",
+          "who_made": "i_did OR someone_else OR collective",
+          "when_made": "made_to_order OR 2020_2026 OR 2010_2019 OR 2000_2009 OR 1990s OR 1980s OR 1970s OR 1960s OR 1950s OR 1940s OR 1930s OR 1920s OR 1910s OR 1900s OR 1800s OR 1700s OR before_1700",
+          "is_supply": false,
+          "suggested_price": 0.00,
+          "suggested_quantity": 1
         }
       }
     }
@@ -315,7 +320,10 @@ REQUIRED JSON STRUCTURE:
 }
 
 Ensure the eBay SEO title is catchy and max 80 characters.
-Ensure Etsy tags are relevant for handmade/vintage/supplies search.
+For Etsy: 
+- who_made: 'i_did' if it looks handmade by a person, 'someone_else' if manufactured.
+- when_made: Be precise about the era. If it's vintage (20+ years), pick the right decade.
+- suggested_price: Based on visual appraisal of resale value.
 """
 MARKETPLACE_INSTRUCTION = MARKETPLACE_INSTRUCTION.strip()
 

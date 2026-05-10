@@ -1070,6 +1070,56 @@
                   <textarea id="Etsy Tags" name="Etsy Tags" rows="2">{{ form.get('Etsy Tags', '') }}</textarea>
                 </div>
 
+                <div class="field-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div class="field">
+                    <label for="Etsy Price">Price ($)</label>
+                    <input type="number" step="0.01" id="Etsy Price" name="Etsy Price" value="{{ form.get('Etsy Price', '0.00') }}">
+                  </div>
+                  <div class="field">
+                    <label for="Etsy Quantity">Quantity</label>
+                    <input type="number" id="Etsy Quantity" name="Etsy Quantity" value="{{ form.get('Etsy Quantity', '1') }}">
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="Etsy Who Made">Who made it?</label>
+                  <select id="Etsy Who Made" name="Etsy Who Made">
+                    <option value="i_did" {% if form.get('Etsy Who Made') == 'i_did' %}selected{% endif %}>I did</option>
+                    <option value="collective" {% if form.get('Etsy Who Made') == 'collective' %}selected{% endif %}>A collective</option>
+                    <option value="someone_else" {% if form.get('Etsy Who Made') == 'someone_else' %}selected{% endif %}>Someone else (manufactured)</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="Etsy When Made">When was it made?</label>
+                  <select id="Etsy When Made" name="Etsy When Made">
+                    <option value="made_to_order" {% if form.get('Etsy When Made') == 'made_to_order' %}selected{% endif %}>Made to order</option>
+                    <option value="2020_2026" {% if form.get('Etsy When Made') == '2020_2026' %}selected{% endif %}>2020 - 2026</option>
+                    <option value="2010_2019" {% if form.get('Etsy When Made') == '2010_2019' %}selected{% endif %}>2010 - 2019</option>
+                    <option value="2000_2009" {% if form.get('Etsy When Made') == '2000_2009' %}selected{% endif %}>2000 - 2009</option>
+                    <option value="1990s" {% if form.get('Etsy When Made') == '1990s' %}selected{% endif %}>1990s (Vintage)</option>
+                    <option value="1980s" {% if form.get('Etsy When Made') == '1980s' %}selected{% endif %}>1980s (Vintage)</option>
+                    <option value="1970s" {% if form.get('Etsy When Made') == '1970s' %}selected{% endif %}>1970s (Vintage)</option>
+                    <option value="1960s" {% if form.get('Etsy When Made') == '1960s' %}selected{% endif %}>1960s (Vintage)</option>
+                    <option value="1950s" {% if form.get('Etsy When Made') == '1950s' %}selected{% endif %}>1950s (Vintage)</option>
+                    <option value="1940s" {% if form.get('Etsy When Made') == '1940s' %}selected{% endif %}>1940s (Vintage)</option>
+                    <option value="1930s" {% if form.get('Etsy When Made') == '1930s' %}selected{% endif %}>1930s (Vintage)</option>
+                    <option value="1920s" {% if form.get('Etsy When Made') == '1920s' %}selected{% endif %}>1920s (Vintage)</option>
+                    <option value="1910s" {% if form.get('Etsy When Made') == '1910s' %}selected{% endif %}>1910s (Vintage)</option>
+                    <option value="1900s" {% if form.get('Etsy When Made') == '1900s' %}selected{% endif %}>1900s (Vintage)</option>
+                    <option value="1800s" {% if form.get('Etsy When Made') == '1800s' %}selected{% endif %}>1800s (Vintage)</option>
+                    <option value="1700s" {% if form.get('Etsy When Made') == '1700s' %}selected{% endif %}>1700s (Vintage)</option>
+                    <option value="before_1700" {% if form.get('Etsy When Made') == 'before_1700' %}selected{% endif %}>Before 1700 (Vintage)</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="Etsy Is Supply" value="yes" {% if form.get('Etsy Is Supply') == 'yes' %}checked{% endif %}>
+                    This is a supply or tool to make things
+                  </label>
+                </div>
+
                 <div class="field">
                   <label for="Etsy Materials">Etsy Materials (Comma separated)</label>
                   <textarea id="Etsy Materials" name="Etsy Materials" rows="2">{{ form.get('Etsy Materials', '') }}</textarea>
