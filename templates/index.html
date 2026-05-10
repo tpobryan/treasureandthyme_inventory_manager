@@ -541,7 +541,10 @@
 
       {% if current_auction %}
         <div id="auctionDetailsPanel" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px solid #e2e8f0;">
-          <div style="font-weight: 600; color: #334155;">Auction {{ current_auction.id }} <span style="font-weight: 400; color: var(--muted); font-size: 0.9em;">(Lot {{ next_lot }})</span></div>
+          <div style="font-weight: 600; color: #334155;">
+            <span id="auctionText">Auction {{ current_auction.id }}</span>
+            <span id="lotIndicator" style="font-weight: 400; color: var(--muted); font-size: 0.9em;">(Lot {{ next_lot }})</span>
+          </div>
           <button type="button" id="btnOpenAuctionSettings" class="secondary" style="width: auto; padding: 6px 12px; font-size: 0.85rem; margin: 0;">⚙️ Settings</button>
         </div>
       {% endif %}
@@ -1101,6 +1104,29 @@
           auctionSettingsModal.classList.remove("active");
         }
       });
+    }
+
+    // Strategy-specific UI toggles (hide Lot indicator for Retail/Inventory)
+    const strategySelect = document.getElementById('strategy');
+    const lotIndicator = document.getElementById('lotIndicator');
+    const auctionText = document.getElementById('auctionText');
+    const auctionButtons = document.getElementById('auctionButtons');
+
+    function updateStrategyUI() {
+      const strategy = strategySelect.value;
+      const isAuction = (strategy === 'auction');
+      
+      if (lotIndicator) lotIndicator.style.display = isAuction ? 'inline' : 'none';
+      if (auctionText) auctionText.style.display = isAuction ? 'inline' : 'none';
+      if (auctionButtons) auctionButtons.style.display = isAuction ? 'flex' : 'none';
+      
+      // Also hide settings button if not auction
+      if (btnOpenAuctionSettings) btnOpenAuctionSettings.style.display = isAuction ? 'inline-block' : 'none';
+    }
+
+    if (strategySelect) {
+      strategySelect.addEventListener('change', updateStrategyUI);
+      updateStrategyUI(); // Initial check
     }
   </script>
 </body>

@@ -442,13 +442,15 @@ def save():
             auction_photo_index=auction_photo_index,
             remote_names=uploaded_names,
         )
+        msg = f"Saved lot {csv_lot_number}" if form.get("Listing Strategy") == "auction" else "Saved item"
         flash(
-            f"Saved lot {csv_lot_number}. Uploaded to auction {auction_number} as: "
+            f"{msg}. Uploaded to auction {auction_number} as: "
             + ", ".join(uploaded_names)
         )
     else:
+        msg = f"Saved lot {csv_lot_number}" if form.get("Listing Strategy") == "auction" else "Saved item"
         flash(
-            f"Saved lot {csv_lot_number} to the database. "
+            f"{msg} to the database. "
             f"Images stored in: {final_dir.name}"
         )
 
