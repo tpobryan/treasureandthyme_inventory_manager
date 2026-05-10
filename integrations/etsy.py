@@ -217,7 +217,7 @@ class EtsyIntegration(PlatformIntegration):
         shop_id = item_data.get("shop_id")
         
         if not access_token or not shop_id:
-            print("[Etsy] Missing credentials for publishing")
+            current_app.logger.warning("[Etsy] Missing credentials for publishing")
             return ""
 
         # 1. Create the draft listing
@@ -230,7 +230,7 @@ class EtsyIntegration(PlatformIntegration):
         for i, img_path in enumerate(image_paths):
             success = self.upload_listing_image(access_token, shop_id, listing_id, img_path, i + 1)
             if not success:
-                print(f"[Etsy] Failed to upload image {i+1}: {img_path}")
+                current_app.logger.warning("[Etsy] Failed to upload image %d: %s", i + 1, img_path)
 
         return f"etsy_{listing_id}"
 
@@ -282,7 +282,7 @@ class EtsyIntegration(PlatformIntegration):
             result = response.json()
             return str(result.get("listing_id"))
         else:
-            print(f"[Etsy] Failed to create draft: {response.text}")
+            current_app.logger.warning("[Etsy] Failed to create draft: %s", response.text)
             return ""
 
     def upload_listing_image(self, access_token: str, shop_id: str, listing_id: str, image_path: str, rank: int) -> bool:

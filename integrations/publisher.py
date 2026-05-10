@@ -30,7 +30,7 @@ def process_platform_publishing(lot_number: int, form: Dict[str, Any], image_fol
 
     for platform_id in platforms_to_publish:
         if platform_id not in PLATFORMS:
-            print(f"[Publisher] Platform {platform_id} not supported for direct publishing yet.")
+            current_app.logger.warning("[Publisher] Platform %s not supported for direct publishing yet.", platform_id)
             continue
 
         try:
@@ -45,7 +45,7 @@ def publish_to_platform(platform_id: str, lot_number: int, form: Dict[str, Any],
     # 1. Get credentials
     creds = get_platform_credentials(platform_id)
     if not creds or not creds.get("access_token"):
-        print(f"[Publisher] {platform_id} is not connected. Cannot publish.")
+        current_app.logger.warning("[Publisher] %s is not connected. Cannot publish.", platform_id)
         return
 
     # 2. Prepare item data
@@ -62,13 +62,13 @@ def publish_to_platform(platform_id: str, lot_number: int, form: Dict[str, Any],
     }
 
     # 3. Call integration
-    print(f"[Publisher] Publishing lot {lot_number} to {platform_id}...")
+    current_app.logger.info("[Publisher] Publishing lot %s to %s...", lot_number, platform_id)
     remote_id = integration.publish_listing(lot_number, item_data)
     
     if remote_id:
-        print(f"[Publisher] Successfully published lot {lot_number} to {platform_id}. Remote ID: {remote_id}")
+        current_app.logger.info("[Publisher] Successfully published lot %s to %s. Remote ID: %s", lot_number, platform_id, remote_id)
         # 4. Update status in database
         update_platform_status(lot_number, platform_id, "published", remote_id=remote_id)
     else:
-        print(f"[Publisher] Failed to publish lot {lot_number} to {platform_id}.")
+        current_app.logger.warning("[Publisher] Failed to publish lot %s to %s.", lot_number, platform_id)
         update_platform_status(lot_number, platform_id, "failed")
