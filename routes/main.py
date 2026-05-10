@@ -75,10 +75,13 @@ def render_edit_page(
     try:
         creds = get_platform_credentials("etsy")
         if creds:
-            current_app.logger.info("[Main] Found Etsy credentials, shop_id: %s", creds['settings'].get('shop_id'))
+            current_app.logger.info("[Main] Found Etsy credentials: %s", json.dumps(creds))
+            shop_id = creds.get('settings', {}).get('shop_id')
+            current_app.logger.info("[Main] Extracted shop_id: %s", shop_id)
+            
             etsy = PLATFORMS.get("etsy")
             if etsy:
-                etsy_shipping_profiles = etsy.get_shipping_profiles(creds["access_token"], creds["settings"].get("shop_id"))
+                etsy_shipping_profiles = etsy.get_shipping_profiles(creds["access_token"], shop_id)
                 current_app.logger.info("[Main] Fetched %d Etsy profiles", len(etsy_shipping_profiles))
         else:
             current_app.logger.info("[Main] No Etsy credentials found in database")
