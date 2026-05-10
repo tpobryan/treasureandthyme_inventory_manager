@@ -121,27 +121,32 @@ class EtsyIntegration(PlatformIntegration):
     def _get_shop_id(self, access_token: str) -> str:
         """Helper to fetch shop_id for the authenticated user."""
         headers = self._get_headers(access_token)
-        # First try getMe - this often returns shop_id directly in v3
+        # Get user details
         url_me = f"{self.api_base}/application/users/me"
         current_app.logger.info("[Etsy] Fetching user details from: %s", url_me)
         response = requests.get(url_me, headers=headers)
         
         if response.status_code == 200:
             data = response.json()
-            current_app.logger.info("[Etsy] User data: %s", json.dumps(data))
-            if data.get("shop_id"):
-                return str(data["shop_id"])
-                
             user_id = data.get("user_id")
-            # Fallback to fetching shops if not in getMe
+            current_app.logger.info("[Etsy] User data: %s", json.dumps(data))
+            
+            # Fetch ALL shops for this user
             url_shops = f"{self.api_base}/application/users/{user_id}/shops"
-            current_app.logger.info("[Etsy] Fetching shops for user %s from: %s", user_id, url_shops)
+            current_app.logger.info("[Etsy] Fetching all shops for user %s from: %s", user_id, url_shops)
             shop_response = requests.get(url_shops, headers=headers)
             if shop_response.status_code == 200:
-                shops = shop_response.json()
-                current_app.logger.info("[Etsy] Shops data: %s", json.dumps(shops))
-                if shops.get("count", 0) > 0:
-                    return str(shops["results"][0]["shop_id"])
+                shops_data = shop_response.json()
+                current_app.logger.info("[Etsy] All shops for user: %s", json.dumps(shops_data))
+                if shops_data.get("count", 0) > 0:
+                    # For now, return the first shop found, but log if there are multiple
+                    first_shop_id = str(shops_data["results"][0]["shop_id"])
+                    current_app.logger.info("[Etsy] Using shop_id: %s", first_shop_id)
+                    return first_shop_id
+            
+            # Fallback to getMe shop_id if shops list failed or was empty
+            if data.get("shop_id"):
+                return str(data["shop_id"])
         else:
             current_app.logger.warning("[Etsy] Failed to fetch user details: %d - %s", response.status_code, response.text)
         
