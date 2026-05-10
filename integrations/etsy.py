@@ -178,6 +178,15 @@ class EtsyIntegration(PlatformIntegration):
         current_app.logger.info("[Etsy] Response Status: %d", response.status_code)
         current_app.logger.info("[Etsy] Raw Response: %s", response.text)
         
+        # Diagnostic: try fetching one listing to see its shipping profile
+        list_url = f"{self.api_base}/application/shops/{shop_id}/listings/active?limit=1"
+        list_res = requests.get(list_url, headers=headers)
+        if list_res.status_code == 200:
+            res_data = list_res.json()
+            if res_data.get("count", 0) > 0:
+                listing = res_data["results"][0]
+                current_app.logger.info("[Etsy] Sample Listing Shipping Profile ID: %s", listing.get("shipping_profile_id"))
+        
         if response.status_code == 200:
             profiles = response.json().get("results", [])
             current_app.logger.info("[Etsy] Successfully fetched %d shipping profiles", len(profiles))
