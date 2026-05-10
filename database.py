@@ -2359,3 +2359,76 @@ def fetch_items_for_lot_numbers(lot_numbers: list[int]) -> list[dict[str, str]]:
             continue
         items.append(row)
     return items
+
+
+def get_platform_credentials(platform_id: str) -> dict[str, Any] | None:
+    """Retrieves credentials and settings for a given platform."""
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    if not connection:
+        return None
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        cursor.execute(
+            f"SELECT access_token, refresh_token, settings_json FROM integrations WHERE platform_id = {placeholder}",
+            (platform_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        if isinstance(row, sqlite3.Row):
+            data = dict(row)
+        else:
+            data = row
+
+        return {
+            "access_token": data.get("access_token"),
+            "refresh_token": data.get("refresh_token"),
+            "settings": json.loads(data.get("settings_json") or "{}")
+        }
+    except Exception as exc:
+        print(f"[Database] Error fetching credentials for {platform_id}: {exc}")
+        return None
+    finally:
+        connection.close()
+
+
+def update_platform_status(lot_number: int, platform_id: str, status: str, remote_id: str = None) -> bool:
+    """Updates the publishing status of an item on a specific platform."""
+    ensure_item_store_ready()
+    connection, dialect = connect_item_store()
+    if not connection:
+        return False
+
+    try:
+        cursor = connection.cursor()
+        placeholder = "?" if dialect == "sqlite" else "%s"
+        
+        if remote_id:
+            cursor.execute(
+                f"""
+                UPDATE item_platform_status 
+                SET status = {placeholder}, remote_id = {placeholder}, published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number = {placeholder} AND platform_id = {placeholder}
+                """,
+                (status, remote_id, lot_number, platform_id)
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE item_platform_status 
+                SET status = {placeholder}, updated_at = CURRENT_TIMESTAMP
+                WHERE lot_number = {placeholder} AND platform_id = {placeholder}
+                """,
+                (status, lot_number, platform_id)
+            )
+        connection.commit()
+        return True
+    except Exception as exc:
+        print(f"[Database] Error updating platform status for lot {lot_number} on {platform_id}: {exc}")
+        return False
+    finally:
+        connection.close()

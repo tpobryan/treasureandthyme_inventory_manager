@@ -12,6 +12,7 @@ from image_processor import apply_auto_enhance
 
 from inventory_manager_generator import InventoryManagerGenerator
 from ftp_client import upload_lot_photos_to_inventory_manager
+from integrations.publisher import process_platform_publishing
 from database import (
     ITEM_STATUS_READY,
     ITEM_STATUS_NEEDS_UPDATE,
@@ -412,6 +413,8 @@ def save():
             
     if platforms_to_publish:
         initialize_platform_status(csv_lot_number, platforms_to_publish)
+        # Trigger actual publishing
+        process_platform_publishing(csv_lot_number, form, final_dir.name)
         
     clear_active_draft(temp_id=temp_id)
 

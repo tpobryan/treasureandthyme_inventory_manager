@@ -155,9 +155,107 @@ class EtsyIntegration(PlatformIntegration):
             return []
 
     def publish_listing(self, lot_number: int, item_data: Dict[str, Any]) -> str:
-        """Publishes the listing to Etsy."""
-        print(f"[Etsy] Publishing lot {lot_number}: {item_data.get('title')}")
-        return f"etsy_{lot_number}_123"
+        """
+        Publishes the listing to Etsy.
+        Expects item_data to contain 'access_token', 'shop_id', and 'platform_data' or raw fields.
+        """
+        access_token = item_data.get("access_token")
+        shop_id = item_data.get("shop_id")
+        
+        if not access_token or not shop_id:
+            print("[Etsy] Missing credentials for publishing")
+            return ""
+
+        # 1. Create the draft listing
+        listing_id = self.create_draft_listing(access_token, shop_id, item_data)
+        if not listing_id:
+            return ""
+
+        # 2. Upload images
+        image_paths = item_data.get("image_paths", [])
+        for i, img_path in enumerate(image_paths):
+            success = self.upload_listing_image(access_token, shop_id, listing_id, img_path, i + 1)
+            if not success:
+                print(f"[Etsy] Failed to upload image {i+1}: {img_path}")
+
+        return f"etsy_{listing_id}"
+
+    def create_draft_listing(self, access_token: str, shop_id: str, data: Dict[str, Any]) -> str:
+        """Creates a draft listing and returns the listing_id."""
+        headers = self._get_headers(access_token)
+        url = f"{self.api_base}/application/shops/{shop_id}/listings"
+        
+        # Map our internal data to Etsy fields
+        # Note: who_made, when_made, what_it_is are required
+        platform_data = data.get("platform_data", {})
+        if isinstance(platform_data, str):
+            import json
+            try:
+                platform_data = json.loads(platform_data)
+            except:
+                platform_data = {}
+
+        etsy_data = platform_data.get("etsy", {})
+        
+        payload = {
+            "quantity": int(data.get("Quantity", 1)),
+            "title": data.get("Title", "Untitled Listing")[:140],
+            "description": data.get("Description", ""),
+            "price": float(data.get("Price", 0.0)),
+            "who_made": data.get("Etsy Who Made") or etsy_data.get("who_made", "someone_else"),
+            "when_made": data.get("Etsy When Made") or etsy_data.get("when_made", "2020_2026"),
+            "taxonomy_id": int(data.get("Etsy Taxonomy ID") or etsy_data.get("taxonomy_id", 1)), # Default to 1 if missing
+            "is_supply": (data.get("Etsy Is Supply") == "yes") or etsy_data.get("is_supply", False),
+            "state": "draft"
+        }
+
+        # Materials and Tags (optional but recommended)
+        materials = data.get("Etsy Materials") or etsy_data.get("materials", [])
+        if isinstance(materials, str):
+            materials = [m.strip() for m in materials.split(",") if m.strip()]
+        if materials:
+            payload["materials"] = materials[:13]
+
+        tags = data.get("Etsy Tags") or etsy_data.get("tags", [])
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        if tags:
+            payload["tags"] = tags[:13]
+
+        response = requests.post(url, headers=headers, data=payload)
+        if response.status_code in [200, 201]:
+            result = response.json()
+            return str(result.get("listing_id"))
+        else:
+            print(f"[Etsy] Failed to create draft: {response.text}")
+            return ""
+
+    def upload_listing_image(self, access_token: str, shop_id: str, listing_id: str, image_path: str, rank: int) -> bool:
+        """Uploads a single image to an existing listing."""
+        if not os.path.exists(image_path):
+            return False
+
+        headers = self._get_headers(access_token)
+        url = f"{self.api_base}/application/shops/{shop_id}/listings/{listing_id}/images"
+        
+        try:
+            with open(image_path, 'rb') as f:
+                files = {
+                    'image': f
+                }
+                data = {
+                    'rank': rank
+                }
+                response = requests.post(url, headers=headers, files=files, data=data)
+                
+            if response.status_code in [200, 201]:
+                return True
+            else:
+                print(f"[Etsy] Image upload failed: {response.text}")
+                return False
+        except Exception as e:
+            print(f"[Etsy] Exception during image upload: {e}")
+            return False
 
     def update_listing(self, lot_number: int, remote_id: str, item_data: Dict[str, Any]) -> bool:
         """Updates an existing listing on Etsy."""
