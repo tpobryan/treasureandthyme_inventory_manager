@@ -275,6 +275,7 @@ def form_from_request(seller_notes: str = "") -> dict[str, str]:
         "Etsy Tags": request.form.get("Etsy Tags", "").strip(),
         "Etsy Materials": request.form.get("Etsy Materials", "").strip(),
         "Etsy Taxonomy ID": request.form.get("Etsy Taxonomy ID", "").strip(),
+        "Etsy Shipping Profile ID": request.form.get("Etsy Shipping Profile ID", "").strip(),
         "Publish to eBay": request.form.get("Publish to eBay", "").strip(),
         "Publish to Etsy": request.form.get("Publish to Etsy", "").strip(),
     }
