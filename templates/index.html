@@ -714,13 +714,6 @@
     const auctionDetailsPanel = document.getElementById("auctionDetailsPanel");
     const auctionButtons = document.getElementById("auctionButtons");
 
-    strategySelect?.addEventListener("change", () => {
-      const isAuction = strategySelect.value === "auction";
-      if (auctionDetailsPanel) auctionDetailsPanel.style.display = isAuction ? "flex" : "none";
-      if (auctionButtons) auctionButtons.style.display = isAuction ? "flex" : "none";
-    });
-    // Trigger on load
-    strategySelect?.dispatchEvent(new Event("change"));
 
     let selectedFiles = [];
     const previewUrls = new Map();
@@ -1106,21 +1099,20 @@
       });
     }
 
-    // Strategy-specific UI toggles (hide Lot indicator for Retail/Inventory)
-    const strategySelect = document.getElementById('strategy');
-    const lotIndicator = document.getElementById('lotIndicator');
-    const auctionText = document.getElementById('auctionText');
-    const auctionButtons = document.getElementById('auctionButtons');
-
+    // Strategy-specific UI toggles
     function updateStrategyUI() {
       const strategy = strategySelect.value;
       const isAuction = (strategy === 'auction');
-      
+      const lotIndicator = document.getElementById('lotIndicator');
+      const auctionText = document.getElementById('auctionText');
+      const auctionDetailsPanel = document.getElementById("auctionDetailsPanel");
+      const auctionButtons = document.getElementById("auctionButtons");
+      const btnOpenAuctionSettings = document.getElementById("btnOpenAuctionSettings");
+
       if (lotIndicator) lotIndicator.style.display = isAuction ? 'inline' : 'none';
       if (auctionText) auctionText.style.display = isAuction ? 'inline' : 'none';
+      if (auctionDetailsPanel) auctionDetailsPanel.style.display = isAuction ? 'flex' : 'none';
       if (auctionButtons) auctionButtons.style.display = isAuction ? 'flex' : 'none';
-      
-      // Also hide settings button if not auction
       if (btnOpenAuctionSettings) btnOpenAuctionSettings.style.display = isAuction ? 'inline-block' : 'none';
     }
 
