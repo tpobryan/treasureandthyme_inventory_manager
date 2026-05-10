@@ -180,12 +180,20 @@ class EtsyIntegration(PlatformIntegration):
         
         # Diagnostic: try fetching one listing to see its shipping profile
         list_url = f"{self.api_base}/application/shops/{shop_id}/listings/active?limit=1"
+        current_app.logger.info("[Etsy] Diagnostic listing fetch from: %s", list_url)
         list_res = requests.get(list_url, headers=headers)
+        current_app.logger.info("[Etsy] Diagnostic listing status: %d", list_res.status_code)
+        current_app.logger.info("[Etsy] Diagnostic listing raw: %s", list_res.text)
+        
         if list_res.status_code == 200:
             res_data = list_res.json()
             if res_data.get("count", 0) > 0:
                 listing = res_data["results"][0]
                 current_app.logger.info("[Etsy] Sample Listing Shipping Profile ID: %s", listing.get("shipping_profile_id"))
+            else:
+                current_app.logger.info("[Etsy] No active listings found for shop %s", shop_id)
+        else:
+            current_app.logger.warning("[Etsy] Failed to fetch sample listing: %d - %s", list_res.status_code, list_res.text)
         
         if response.status_code == 200:
             profiles = response.json().get("results", [])
