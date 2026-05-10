@@ -4,6 +4,7 @@ import hashlib
 import base64
 import secrets
 from typing import Any, Dict
+from flask import current_app
 from integrations.base import PlatformIntegration
 
 class EtsyIntegration(PlatformIntegration):
@@ -157,20 +158,20 @@ class EtsyIntegration(PlatformIntegration):
     def get_shipping_profiles(self, access_token: str, shop_id: str) -> list[Dict[str, Any]]:
         """Fetches available shipping profiles for the shop."""
         if not shop_id:
-            print("[Etsy] Cannot fetch shipping profiles: shop_id is missing")
+            current_app.logger.info("[Etsy] Cannot fetch shipping profiles: shop_id is missing")
             return []
             
         headers = self._get_headers(access_token)
         url = f"{self.api_base}/application/shops/{shop_id}/shipping-profiles"
-        print(f"[Etsy] Fetching shipping profiles from: {url}")
+        current_app.logger.info("[Etsy] Fetching shipping profiles from: %s", url)
         
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             profiles = response.json().get("results", [])
-            print(f"[Etsy] Successfully fetched {len(profiles)} shipping profiles")
+            current_app.logger.info("[Etsy] Successfully fetched %d shipping profiles", len(profiles))
             return profiles
         else:
-            print(f"[Etsy] Failed to fetch shipping profiles: {response.status_code} - {response.text}")
+            current_app.logger.warning("[Etsy] Failed to fetch shipping profiles: %d - %s", response.status_code, response.text)
             return []
 
     def publish_listing(self, lot_number: int, item_data: Dict[str, Any]) -> str:

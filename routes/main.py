@@ -75,16 +75,15 @@ def render_edit_page(
     try:
         creds = get_platform_credentials("etsy")
         if creds:
-            print(f"[Main] Found Etsy credentials, shop_id: {creds['settings'].get('shop_id')}")
+            current_app.logger.info("[Main] Found Etsy credentials, shop_id: %s", creds['settings'].get('shop_id'))
             etsy = PLATFORMS.get("etsy")
             if etsy:
                 etsy_shipping_profiles = etsy.get_shipping_profiles(creds["access_token"], creds["settings"].get("shop_id"))
-                print(f"[Main] Fetched {len(etsy_shipping_profiles)} Etsy profiles")
+                current_app.logger.info("[Main] Fetched %d Etsy profiles", len(etsy_shipping_profiles))
         else:
-            print("[Main] No Etsy credentials found in database")
+            current_app.logger.info("[Main] No Etsy credentials found in database")
     except Exception as exc:
-        current_app.logger.warning("Failed to fetch Etsy shipping profiles: %s", exc)
-        print(f"[Main] Error fetching Etsy shipping profiles: {exc}")
+        current_app.logger.warning("[Main] Failed to fetch Etsy shipping profiles: %s", exc)
 
     return render_template(
         "edit.html",
