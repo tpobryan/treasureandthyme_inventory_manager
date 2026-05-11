@@ -1,4 +1,6 @@
-/data/
+/data/*
+!/data/etsy_taxonomy.json
+!/data/etsy_taxonomy_flat.json
 /uploads/
 __pycache__/
 .venv/
