@@ -1162,7 +1162,13 @@
 
                 <div class="field">
                   <label for="Etsy Taxonomy ID">Taxonomy ID</label>
-                  <input type="text" id="Etsy Taxonomy ID" name="Etsy Taxonomy ID" value="{{ form.get('Etsy Taxonomy ID', '') }}" placeholder="Enter Taxonomy ID to publish">
+                  <div style="display: flex; gap: 8px;">
+                    <input type="text" id="Etsy Taxonomy ID" name="Etsy Taxonomy ID" value="{{ form.get('Etsy Taxonomy ID', '') }}" placeholder="ID" style="width: 100px;">
+                    <button type="button" class="secondary" id="searchTaxonomyBtn" style="padding: 0 12px; height: 42px;">Search Categories</button>
+                  </div>
+                  <div id="etsyTaxonomyResolved" class="help" style="margin-top: 4px; font-weight: 700; color: #9a3412;">
+                    {{ get_taxonomy_name(form.get('Etsy Taxonomy ID')) if form.get('Etsy Taxonomy ID') else 'No category selected' }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1174,7 +1180,23 @@
           </div>
         </form>
       </div>
+    <!-- TAXONOMY MODAL -->
+  <div id="taxonomyModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Etsy Category Search</h2>
+        <button type="button" class="modal-close" id="closeTaxonomyBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <input type="text" id="taxonomyQuery" placeholder="Search categories (e.g. jewelry, vintage, decor)..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 1rem;">
+        </div>
+        <div id="taxonomyResults" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
+          <!-- Results will appear here -->
+        </div>
+      </div>
     </div>
+  </div>
   </div>
 
   <script>
@@ -1189,7 +1211,54 @@
     const reorderForm = document.getElementById('reorderForm');
     let draggedItem = null;
 
-    if (grid && saveOrderBtn && reorderForm) {
+      // Taxonomy Search Logic
+      const searchTaxonomyBtn = document.getElementById('searchTaxonomyBtn');
+      const taxonomyModal = document.getElementById('taxonomyModal');
+      const closeTaxonomyBtn = document.getElementById('closeTaxonomyBtn');
+      const taxonomyQuery = document.getElementById('taxonomyQuery');
+      const taxonomyResults = document.getElementById('taxonomyResults');
+      const taxonomyInput = document.getElementById('Etsy Taxonomy ID');
+      const taxonomyResolved = document.getElementById('etsyTaxonomyResolved');
+
+      if (searchTaxonomyBtn) {
+        searchTaxonomyBtn.addEventListener('click', () => {
+          taxonomyModal.style.display = 'flex';
+          taxonomyQuery.focus();
+        });
+
+        closeTaxonomyBtn.addEventListener('click', () => {
+          taxonomyModal.style.display = 'none';
+        });
+
+        taxonomyQuery.addEventListener('input', async (e) => {
+          const q = e.target.value;
+          if (q.length < 2) {
+            taxonomyResults.innerHTML = '';
+            return;
+          }
+
+          const res = await fetch(`/api/etsy/taxonomy/search?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          
+          taxonomyResults.innerHTML = data.results.map(item => `
+            <div class="taxonomy-result-item" data-id="${item.id}" data-name="${item.name}" style="padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; hover: background: #f8fafc;">
+              <div style="font-weight: 600; font-size: 0.9rem;">${item.name}</div>
+              <div style="font-size: 0.75rem; color: #64748b;">ID: ${item.id}</div>
+            </div>
+          `).join('');
+
+          document.querySelectorAll('.taxonomy-result-item').forEach(el => {
+            el.addEventListener('click', () => {
+              const id = el.dataset.id;
+              const name = el.dataset.name;
+              taxonomyInput.value = id;
+              taxonomyResolved.innerText = name;
+              taxonomyModal.style.display = 'none';
+            });
+          });
+        });
+      }
+
       grid.addEventListener('dragstart', (e) => {
         draggedItem = e.target.closest('.thumb');
         if (draggedItem) {

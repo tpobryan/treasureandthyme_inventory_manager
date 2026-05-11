@@ -48,6 +48,11 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
 app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+
+@app.context_processor
+def inject_taxonomy_helpers():
+    from integrations.taxonomy import get_taxonomy_name
+    return dict(get_taxonomy_name=get_taxonomy_name)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 app.config["MAX_FORM_MEMORY_SIZE"] = 50 * 1024 * 1024
 
@@ -100,6 +105,19 @@ def inject_auction_context() -> dict[str, Any]:
         "csrf_input": csrf_input,
     }
 
+
+@app.route("/api/etsy/taxonomy/search")
+def api_etsy_taxonomy_search():
+    from integrations.taxonomy import search_taxonomy
+    query = request.args.get("q", "")
+    if len(query) < 2:
+        return {"results": []}
+    return {"results": search_taxonomy(query)}
+
+@app.route("/api/etsy/taxonomy/resolve/<int:taxonomy_id>")
+def api_etsy_taxonomy_resolve(taxonomy_id):
+    from integrations.taxonomy import get_taxonomy_name
+    return {"name": get_taxonomy_name(taxonomy_id)}
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
