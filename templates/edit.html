@@ -1211,89 +1211,52 @@
     const reorderForm = document.getElementById('reorderForm');
     let draggedItem = null;
 
-      // Taxonomy Search Logic
-      const searchTaxonomyBtn = document.getElementById('searchTaxonomyBtn');
-      const taxonomyModal = document.getElementById('taxonomyModal');
-      const closeTaxonomyBtn = document.getElementById('closeTaxonomyBtn');
-      const taxonomyQuery = document.getElementById('taxonomyQuery');
-      const taxonomyResults = document.getElementById('taxonomyResults');
-      const taxonomyInput = document.getElementById('Etsy Taxonomy ID');
-      const taxonomyResolved = document.getElementById('etsyTaxonomyResolved');
+    }
 
-      if (searchTaxonomyBtn) {
-        searchTaxonomyBtn.addEventListener('click', () => {
-          taxonomyModal.style.display = 'flex';
-          taxonomyQuery.focus();
-        });
+    // Taxonomy Search Logic
+    const searchTaxonomyBtn = document.getElementById('searchTaxonomyBtn');
+    const taxonomyModal = document.getElementById('taxonomyModal');
+    const closeTaxonomyBtn = document.getElementById('closeTaxonomyBtn');
+    const taxonomyQuery = document.getElementById('taxonomyQuery');
+    const taxonomyResults = document.getElementById('taxonomyResults');
+    const taxonomyInput = document.getElementById('Etsy Taxonomy ID');
+    const taxonomyResolved = document.getElementById('etsyTaxonomyResolved');
 
-        closeTaxonomyBtn.addEventListener('click', () => {
-          taxonomyModal.style.display = 'none';
-        });
+    if (searchTaxonomyBtn) {
+      searchTaxonomyBtn.addEventListener('click', () => {
+        taxonomyModal.style.display = 'flex';
+        taxonomyQuery.focus();
+      });
 
-        taxonomyQuery.addEventListener('input', async (e) => {
-          const q = e.target.value;
-          if (q.length < 2) {
-            taxonomyResults.innerHTML = '';
-            return;
-          }
+      closeTaxonomyBtn.addEventListener('click', () => {
+        taxonomyModal.style.display = 'none';
+      });
 
-          const res = await fetch(`/api/etsy/taxonomy/search?q=${encodeURIComponent(q)}`);
-          const data = await res.json();
-          
-          taxonomyResults.innerHTML = data.results.map(item => `
-            <div class="taxonomy-result-item" data-id="${item.id}" data-name="${item.name}" style="padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; hover: background: #f8fafc;">
-              <div style="font-weight: 600; font-size: 0.9rem;">${item.name}</div>
-              <div style="font-size: 0.75rem; color: #64748b;">ID: ${item.id}</div>
-            </div>
-          `).join('');
+      taxonomyQuery.addEventListener('input', async (e) => {
+        const q = e.target.value;
+        if (q.length < 2) {
+          taxonomyResults.innerHTML = '';
+          return;
+        }
 
-          document.querySelectorAll('.taxonomy-result-item').forEach(el => {
-            el.addEventListener('click', () => {
-              const id = el.dataset.id;
-              const name = el.dataset.name;
-              taxonomyInput.value = id;
-              taxonomyResolved.innerText = name;
-              taxonomyModal.style.display = 'none';
-            });
+        const res = await fetch(`/api/etsy/taxonomy/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        
+        taxonomyResults.innerHTML = data.results.map(item => `
+          <div class="taxonomy-result-item" data-id="${item.id}" data-name="${item.name}" style="padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; hover: background: #f8fafc;">
+            <div style="font-weight: 600; font-size: 0.9rem;">${item.name}</div>
+            <div style="font-size: 0.75rem; color: #64748b;">ID: ${item.id}</div>
+          </div>
+        `).join('');
+
+        document.querySelectorAll('.taxonomy-result-item').forEach(el => {
+          el.addEventListener('click', () => {
+            const id = el.dataset.id;
+            const name = el.dataset.name;
+            if (taxonomyInput) taxonomyInput.value = id;
+            if (taxonomyResolved) taxonomyResolved.innerText = name;
+            taxonomyModal.style.display = 'none';
           });
-        });
-      }
-
-      grid.addEventListener('dragstart', (e) => {
-        draggedItem = e.target.closest('.thumb');
-        if (draggedItem) {
-          setTimeout(() => draggedItem.classList.add('dragging'), 0);
-        }
-      });
-
-      grid.addEventListener('dragend', (e) => {
-        if (draggedItem) {
-          draggedItem.classList.remove('dragging');
-        }
-        draggedItem = null;
-      });
-
-      grid.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const currentItem = document.querySelector('.dragging');
-        if (!currentItem) return;
-
-        const target = e.target.closest('.thumb:not(.dragging)');
-        if (target && target !== currentItem) {
-          const box = target.getBoundingClientRect();
-          const isAfter = (e.clientX - box.left) > (box.width / 2);
-          isAfter ? target.after(currentItem) : target.before(currentItem);
-          saveOrderBtn.style.display = 'inline-block';
-        }
-      });
-
-      reorderForm.addEventListener('submit', (e) => {
-        grid.querySelectorAll('.thumb-name').forEach(nameDiv => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = 'ordered_files';
-          input.value = nameDiv.getAttribute('data-filename');
-          reorderForm.appendChild(input);
         });
       });
     }
@@ -1341,7 +1304,9 @@
 
       const btns = document.querySelectorAll('.tab-btn');
       btns.forEach(btn => {
-        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("'" + tabId + "'")) {
+        // More robust check for the onclick handler
+        const onclick = btn.getAttribute('onclick') || '';
+        if (onclick.includes("showTab('" + tabId + "')")) {
           btn.classList.add('active');
         }
       });
@@ -1368,17 +1333,13 @@
     // Initialize UI state
     document.addEventListener('DOMContentLoaded', () => {
       updateStrategyUI();
+      
       // Ensure the correct tab button is highlighted for the active tab on load
       const activeTab = document.querySelector('.tab-content.active');
       if (activeTab) {
         const tabId = activeTab.id.replace('tab-', '');
         showTab(tabId);
       }
-    });
-
-    // Initialize UI state
-    document.addEventListener('DOMContentLoaded', () => {
-      updateStrategyUI();
     });
 
     reviseForm.addEventListener("submit", (event) => {
