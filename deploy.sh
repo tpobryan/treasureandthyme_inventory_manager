@@ -19,7 +19,15 @@ rsync -avz --delete \
   --exclude '.env' \
   --exclude '__pycache__/' \
   --exclude '.git/' \
-  --exclude 'data/' \
+  --exclude 'data/*.db' \
+  --exclude 'data/auction_items.csv' \
+  --exclude 'data/exports/' \
+  --exclude 'data/uploads/' \
+  --exclude 'data/lot_state.json' \
+  --exclude 'data/active_draft.json' \
+  --exclude 'data/auction_photo_state.json' \
+  --exclude 'data/ftp_upload_state.json' \
+  --exclude 'data/lot_state.json' \
   --exclude '.pytest_cache/' \
   --exclude 'tests/' \
   --exclude '.DS_Store' \
