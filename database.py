@@ -1175,20 +1175,23 @@ def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
         cursor.execute(
             f"""
             SELECT
-                lot_number,
-                title,
-                category,
-                shipping_available,
-                status,
-                image_folder,
-                created_at,
-                updated_at,
-                published_at,
-                last_export_batch
-            FROM auction_items
-            WHERE auction_id = {("?" if dialect == "sqlite" else "%s")}
-              AND status IN ({placeholders})
-            ORDER BY lot_number
+                ai.lot_number,
+                ai.title,
+                ai.category,
+                ai.shipping_available,
+                ai.status,
+                ai.image_folder,
+                ai.created_at,
+                ai.updated_at,
+                ai.published_at,
+                ai.last_export_batch,
+                GROUP_CONCAT(ips.platform || ':' || ips.status) as platform_statuses
+            FROM auction_items ai
+            LEFT JOIN item_platform_status ips ON ai.lot_number = ips.lot_number
+            WHERE ai.auction_id = {("?" if dialect == "sqlite" else "%s")}
+              AND ai.status IN ({placeholders})
+            GROUP BY ai.lot_number
+            ORDER BY ai.lot_number
             """,
             (current_auction_id, *tuple(statuses)),
         )

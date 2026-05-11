@@ -267,6 +267,30 @@
       color: var(--removed-text);
     }
 
+    .platform-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      margin-bottom: 4px;
+    }
+
+    .platform-pill.etsy { color: #f45b00; border-color: #ffedd5; background: #fffaf5; }
+    .platform-pill.ebay { color: #0064d2; border-color: #dbeafe; background: #f5f9ff; }
+    
+    .platform-status {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: lowercase;
+    }
+
     .footer-actions {
       display: flex;
       justify-content: space-between;
@@ -365,10 +389,8 @@
                   <th>Lot</th>
                   <th>Title</th>
                   <th>Category</th>
-                  <th>Shipping</th>
+                  <th>Platforms</th>
                   <th>Status</th>
-                  <th>Photos</th>
-                  <th>Last Export</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -389,7 +411,19 @@
                       <div class="meta">Saved {{ item['created_at'] }}</div>
                     </td>
                     <td>{{ item['category'] }}</td>
-                    <td>{{ item['shipping_available'] or 'No' }}</td>
+                    <td>
+                      {% if item['platform_statuses'] %}
+                        {% for ps in item['platform_statuses'].split(',') %}
+                          {% set parts = ps.split(':') %}
+                          <div class="platform-pill {{ parts[0] }}">
+                            {{ parts[0] }}
+                            <span class="platform-status">• {{ parts[1] }}</span>
+                          </div>
+                        {% endfor %}
+                      {% else %}
+                        <span class="meta">Auction Only</span>
+                      {% endif %}
+                    </td>
                     <td>
                       <span class="status-pill status-{{ item['status'].replace('_', '-') }}">{{ item['status'] }}</span>
                       {% if item['published_at'] %}
@@ -398,8 +432,6 @@
                         <div class="meta">Updated {{ item['updated_at'] }}</div>
                       {% endif %}
                     </td>
-                    <td>{{ item['image_folder'] }}</td>
-                    <td>{{ item['last_export_batch'] or 'Not exported yet' }}</td>
                     <td>
                       <div class="inline-actions">
                         <a class="button-link secondary" href="{{ url_for('items.edit_saved_item', lot_number=item['lot_number'], status=current_filter) }}">Edit</a>
