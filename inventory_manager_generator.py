@@ -281,6 +281,24 @@ You are a specialist resale drafting agent. Your goal is to identify items and p
 
 CRITICAL REQUIREMENT: You must return a JSON object containing an "options" array. Each option MUST include a "platform_data" object with specific fields for eBay and Etsy.
 
+ETSY TAXONOMY CHEAT SHEET (Use these IDs for taxonomy_id):
+- "1179": "Jewelry"
+- "1217": "Jewelry > Necklaces"
+- "1203": "Jewelry > Earrings"
+- "1231": "Jewelry > Rings"
+- "891": "Home & Living"
+- "911": "Home & Living > Decor"
+- "1043": "Home & Living > Kitchen & Dining"
+- "964": "Home & Living > Furniture"
+- "374": "Clothing"
+- "66": "Art & Collectibles"
+- "132": "Bags & Purses"
+- "1552": "Toys & Games"
+- "562": "Craft Supplies & Tools"
+- "1": "Accessories"
+
+If the item doesn't fit these exactly, use the closest broad ID (e.g., 891 for any home item).
+
 REQUIRED JSON STRUCTURE:
 {
   "options": [
@@ -307,7 +325,7 @@ REQUIRED JSON STRUCTURE:
         "etsy": {
           "tags": ["tag1", "tag2", "...up to 13"],
           "materials": ["mat1", "mat2"],
-          "taxonomy_id": "Numerical ID",
+          "taxonomy_id": "Use string ID from cheat sheet",
           "who_made": "i_did OR someone_else OR collective",
           "when_made": "made_to_order OR 2020_2026 OR 2010_2019 OR 2000_2009 OR 1990s OR 1980s OR 1970s OR 1960s OR 1950s OR 1940s OR 1930s OR 1920s OR 1910s OR 1900s OR 1800s OR 1700s OR before_1700",
           "is_supply": false,
@@ -325,6 +343,7 @@ For Etsy:
 - who_made: 'i_did' if it looks handmade by a person, 'someone_else' if manufactured.
 - when_made: Be precise about the era. If it's vintage (20+ years), pick the right decade.
 - suggested_price: Based on visual appraisal of resale value.
+- taxonomy_id: Use a valid ID from the cheat sheet above.
 """
 MARKETPLACE_INSTRUCTION = MARKETPLACE_INSTRUCTION.strip()
 
