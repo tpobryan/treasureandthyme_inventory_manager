@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import json
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,7 @@ def test_env(tmp_path, monkeypatch):
     utils_module.EXPORTS_DIR = exports_dir
     exports_module.EXPORTS_DIR = exports_dir
     db_module._DB_INITIALIZED = False
+    db_module._DB_INITIALIZED_URL = None
     app_module.app.config["TESTING"] = True
     app_module.app.config["WTF_CSRF_ENABLED"] = False
     monkeypatch.setenv("DATABASE_URL", "")
@@ -133,7 +135,7 @@ def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch)
     )
     assert good_login.status_code == 200
     assert b"Signed in." in good_login.data
-    assert b"InventoryManager Listing Generator" in good_login.data
+    assert b"Inventory Manager" in good_login.data
 
 
 def test_login_rejects_missing_csrf_token_when_auth_is_enabled(test_env, monkeypatch):
@@ -1535,3 +1537,35 @@ def test_auto_enhance_preview(test_env, monkeypatch):
     assert response.status_code == 200
     assert response.json["success"] is True
     assert response.json["image_data"].startswith("data:image/jpeg;base64,")
+
+def test_etsy_taxonomy_api(test_env, tmp_path, monkeypatch):
+    # Setup mock data directory
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(exist_ok=True)
+    
+    dummy_data = {
+        "results": [{"id": 1, "name": "Accessories", "children": []}]
+    }
+    with open(data_dir / "etsy_taxonomy.json", "w") as f:
+        json.dump(dummy_data, f)
+        
+    import integrations.taxonomy
+    monkeypatch.setattr(integrations.taxonomy, "DATA_DIR", data_dir)
+    monkeypatch.setattr(integrations.taxonomy, "TAXONOMY_FILE", data_dir / "etsy_taxonomy.json")
+    monkeypatch.setattr(integrations.taxonomy, "FLAT_TAXONOMY_FILE", data_dir / "etsy_taxonomy_flat.json")
+
+    # Test Search
+    response = test_env["client"].get("/api/etsy/taxonomy/search?q=acc")
+    assert response.status_code == 200
+    assert len(response.json["results"]) == 1
+    assert response.json["results"][0]["id"] == "1"
+    
+    # Test Resolve
+    response = test_env["client"].get("/api/etsy/taxonomy/resolve/1")
+    assert response.status_code == 200
+    assert response.json["name"] == "Accessories"
+    
+    # Test Resolve Unknown
+    response = test_env["client"].get("/api/etsy/taxonomy/resolve/999")
+    assert response.status_code == 200
+    assert "Unknown" in response.json["name"]

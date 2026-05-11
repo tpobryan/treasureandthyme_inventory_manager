@@ -1185,7 +1185,7 @@ def fetch_manage_items(status_filter: str = "active") -> list[dict[str, str]]:
                 ai.updated_at,
                 ai.published_at,
                 ai.last_export_batch,
-                GROUP_CONCAT(ips.platform || ':' || ips.status) as platform_statuses
+                GROUP_CONCAT(ips.platform_id || ':' || ips.status) as platform_statuses
             FROM auction_items ai
             LEFT JOIN item_platform_status ips ON ai.lot_number = ips.lot_number
             WHERE ai.auction_id = {("?" if dialect == "sqlite" else "%s")}
