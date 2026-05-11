@@ -1009,16 +1009,30 @@
 
                 <div class="grid-3">
                   <div class="field">
-                    <label for="Dimensions - Length">Length</label>
+                    <label for="Dimensions - Length">Length (in)</label>
                     <input type="text" id="Dimensions - Length" name="Dimensions - Length" value="{{ form['Dimensions - Length'] }}">
                   </div>
                   <div class="field">
-                    <label for="Dimensions - Depth">Width/Depth</label>
+                    <label for="Dimensions - Depth">Width/Depth (in)</label>
                     <input type="text" id="Dimensions - Depth" name="Dimensions - Depth" value="{{ form['Dimensions - Depth'] }}">
                   </div>
                   <div class="field">
-                    <label for="Dimensions - Height">Height</label>
+                    <label for="Dimensions - Height">Height (in)</label>
                     <input type="text" id="Dimensions - Height" name="Dimensions - Height" value="{{ form['Dimensions - Height'] }}">
+                  </div>
+                </div>
+
+                <div class="grid-2">
+                  <div class="field">
+                    <label for="Item Weight">Weight</label>
+                    <input type="text" id="Item Weight" name="Item Weight" value="{{ form.get('Item Weight', '') }}" placeholder="e.g. 1.5">
+                  </div>
+                  <div class="field">
+                    <label for="Item Weight Unit">Weight Unit</label>
+                    <select id="Item Weight Unit" name="Item Weight Unit">
+                      <option value="oz" {% if form.get('Item Weight Unit') == 'oz' %}selected{% endif %}>Ounces (oz)</option>
+                      <option value="lb" {% if form.get('Item Weight Unit', 'lb') == 'lb' %}selected{% endif %}>Pounds (lb)</option>
+                    </select>
                   </div>
                 </div>
 

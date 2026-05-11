@@ -227,6 +227,8 @@ def blank_form(seller_notes: str = "") -> dict[str, str]:
         "Quantity": "1",
         "Publish to eBay": "no",
         "Publish to Etsy": "",
+        "Item Weight": "",
+        "Item Weight Unit": "lb",
     }
 
 def options_from_request() -> list[dict]:
@@ -278,6 +280,8 @@ def form_from_request(seller_notes: str = "") -> dict[str, str]:
         "Etsy Shipping Profile ID": request.form.get("Etsy Shipping Profile ID", "").strip(),
         "Publish to eBay": request.form.get("Publish to eBay", "").strip(),
         "Publish to Etsy": request.form.get("Publish to Etsy", "").strip(),
+        "Item Weight": request.form.get("Item Weight", "").strip(),
+        "Item Weight Unit": request.form.get("Item Weight Unit", "lb").strip(),
     }
 
 def form_from_option(option: dict, seller_notes: str = "", strategy: str = "auction") -> dict[str, str]:

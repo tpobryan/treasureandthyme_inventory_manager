@@ -261,7 +261,13 @@ class EtsyIntegration(PlatformIntegration):
             "taxonomy_id": int(data.get("Etsy Taxonomy ID") or etsy_data.get("taxonomy_id", 1)), # Default to 1 if missing
             "is_supply": (data.get("Etsy Is Supply") == "yes") or etsy_data.get("is_supply", False),
             "shipping_profile_id": int(data.get("Etsy Shipping Profile ID") or etsy_data.get("shipping_profile_id", 0)),
-            "state": "draft"
+            "state": "draft",
+            "item_weight": float(data.get("Item Weight") or 1.0),
+            "item_weight_unit": data.get("Item Weight Unit", "lb"),
+            "item_length": float(data.get("Dimensions - Length") or 1.0),
+            "item_width": float(data.get("Dimensions - Depth") or 1.0),
+            "item_height": float(data.get("Dimensions - Height") or 1.0),
+            "item_dimensions_unit": "in"
         }
         
         # Try to get a default readiness_state_id if not provided
