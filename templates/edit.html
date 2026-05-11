@@ -922,10 +922,10 @@
             {% endfor %}
 
             <div class="tabs" id="draftTabs">
-              <button type="button" class="tab-btn active" onclick="showTab('base')">Core Info</button>
-              <button type="button" class="tab-btn" id="auctionTabBtn" onclick="showTab('auction')">Auction Details</button>
-              <button type="button" class="tab-btn" onclick="showTab('ebay')">eBay Draft</button>
-              <button type="button" class="tab-btn" onclick="showTab('etsy')">Etsy Draft</button>
+              <button type="button" class="tab-btn active" data-tab="base">Core Info</button>
+              <button type="button" class="tab-btn" id="auctionTabBtn" data-tab="auction">Auction Details</button>
+              <button type="button" class="tab-btn" data-tab="ebay">eBay Draft</button>
+              <button type="button" class="tab-btn" data-tab="etsy">Etsy Draft</button>
             </div>
 
             <!-- TAB: BASE -->
@@ -1179,137 +1179,41 @@
             <button type="button" class="secondary" id="reviseOpenBtn">Revise with AI</button>
           </div>
         </form>
+      </div> <!-- Close Final Draft card -->
+    </div> <!-- Close Right Column -->
+  </div> <!-- Close Layout -->
+</div> <!-- Close Wrap -->
+
+<!-- TAXONOMY MODAL -->
+<div id="taxonomyModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 class="modal-title">Etsy Category Search</h2>
+      <button type="button" class="modal-close" id="closeTaxonomyBtn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <input type="text" id="taxonomyQuery" placeholder="Search categories (e.g. jewelry, vintage, decor)..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 1rem;">
       </div>
-    <!-- TAXONOMY MODAL -->
-  <div id="taxonomyModal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h2 class="modal-title">Etsy Category Search</h2>
-        <button type="button" class="modal-close" id="closeTaxonomyBtn">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="field">
-          <input type="text" id="taxonomyQuery" placeholder="Search categories (e.g. jewelry, vintage, decor)..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 1rem;">
-        </div>
-        <div id="taxonomyResults" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
-          <!-- Results will appear here -->
-        </div>
+      <div id="taxonomyResults" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
+        <!-- Results will appear here -->
       </div>
     </div>
   </div>
-  </div>
+</div>
 
   <script>
-    const reviseForm = document.getElementById("reviseForm");
-    const reviseButton = document.getElementById("reviseButton");
-    const reviseLoadingOverlay = document.getElementById("reviseLoadingOverlay");
-    const reviseLoadingTitle = reviseLoadingOverlay.querySelector(".loading-title");
-    const reviseLoadingCopy = reviseLoadingOverlay.querySelector(".loading-copy");
-
-    const grid = document.getElementById('photoGrid');
-    const saveOrderBtn = document.getElementById('saveOrderBtn');
-    const reorderForm = document.getElementById('reorderForm');
-    let draggedItem = null;
-
-    }
-
-    // Taxonomy Search Logic
-    const searchTaxonomyBtn = document.getElementById('searchTaxonomyBtn');
-    const taxonomyModal = document.getElementById('taxonomyModal');
-    const closeTaxonomyBtn = document.getElementById('closeTaxonomyBtn');
-    const taxonomyQuery = document.getElementById('taxonomyQuery');
-    const taxonomyResults = document.getElementById('taxonomyResults');
-    const taxonomyInput = document.getElementById('Etsy Taxonomy ID');
-    const taxonomyResolved = document.getElementById('etsyTaxonomyResolved');
-
-    if (searchTaxonomyBtn) {
-      searchTaxonomyBtn.addEventListener('click', () => {
-        taxonomyModal.style.display = 'flex';
-        taxonomyQuery.focus();
-      });
-
-      closeTaxonomyBtn.addEventListener('click', () => {
-        taxonomyModal.style.display = 'none';
-      });
-
-      taxonomyQuery.addEventListener('input', async (e) => {
-        const q = e.target.value;
-        if (q.length < 2) {
-          taxonomyResults.innerHTML = '';
-          return;
-        }
-
-        const res = await fetch(`/api/etsy/taxonomy/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        
-        taxonomyResults.innerHTML = data.results.map(item => `
-          <div class="taxonomy-result-item" data-id="${item.id}" data-name="${item.name}" style="padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; hover: background: #f8fafc;">
-            <div style="font-weight: 600; font-size: 0.9rem;">${item.name}</div>
-            <div style="font-size: 0.75rem; color: #64748b;">ID: ${item.id}</div>
-          </div>
-        `).join('');
-
-        document.querySelectorAll('.taxonomy-result-item').forEach(el => {
-          el.addEventListener('click', () => {
-            const id = el.dataset.id;
-            const name = el.dataset.name;
-            if (taxonomyInput) taxonomyInput.value = id;
-            if (taxonomyResolved) taxonomyResolved.innerText = name;
-            taxonomyModal.style.display = 'none';
-          });
-        });
-      });
-    }
-
-    let reviseStepTimer = null;
-    let reviseSubmitting = false;
-
-    const reviseSteps = [
-      {
-        title: "Sending your revision request",
-        copy: "Passing your current draft, photos, and notes back to AI for targeted edits."
-      },
-      {
-        title: "Reviewing the item again",
-        copy: "Re-checking the visible details so the revised wording stays grounded in the photos."
-      },
-      {
-        title: "Updating the listing draft",
-        copy: "Applying the requested changes while keeping the rest of your listing intact."
-      }
-    ];
-
-    function setReviseStep(index) {
-      const step = reviseSteps[index % reviseSteps.length];
-      reviseLoadingTitle.textContent = step.title;
-      reviseLoadingCopy.textContent = step.copy;
-    }
-
-    function startReviseLoadingState() {
-      let stepIndex = 0;
-      setReviseStep(stepIndex);
-      reviseStepTimer = window.setInterval(() => {
-        stepIndex += 1;
-        setReviseStep(stepIndex);
-      }, 2200);
-    }
-
-    // Tabs & Strategy Logic
+    // --- Global UI Helpers ---
     function showTab(tabId) {
+      console.log("Showing tab:", tabId);
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('active');
+        if (el.getAttribute('data-tab') === tabId) el.classList.add('active');
+      });
       
       const targetTab = document.getElementById('tab-' + tabId);
       if (targetTab) targetTab.classList.add('active');
-
-      const btns = document.querySelectorAll('.tab-btn');
-      btns.forEach(btn => {
-        // More robust check for the onclick handler
-        const onclick = btn.getAttribute('onclick') || '';
-        if (onclick.includes("showTab('" + tabId + "')")) {
-          btn.classList.add('active');
-        }
-      });
     }
 
     function updateStrategyUI() {
@@ -1318,6 +1222,8 @@
 
       const strategy = strategySelect.value;
       const auctionTabBtn = document.getElementById('auctionTabBtn');
+      
+      console.log("Updating strategy UI for:", strategy);
       
       if (strategy === 'retail' || strategy === 'inventory') {
         if (auctionTabBtn) auctionTabBtn.style.display = 'none';
@@ -1330,34 +1236,169 @@
       }
     }
 
-    // Initialize UI state
     document.addEventListener('DOMContentLoaded', () => {
-      updateStrategyUI();
+      console.log("Edit page script initializing...");
       
-      // Ensure the correct tab button is highlighted for the active tab on load
-      const activeTab = document.querySelector('.tab-content.active');
-      if (activeTab) {
-        const tabId = activeTab.id.replace('tab-', '');
-        showTab(tabId);
+      try {
+        // Tab Event Listeners
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const tabId = btn.getAttribute('data-tab');
+            if (tabId) showTab(tabId);
+          });
+        });
+
+        // Strategy Listener
+        const strategySelect = document.getElementById('Listing Strategy');
+        if (strategySelect) {
+          strategySelect.addEventListener('change', updateStrategyUI);
+        }
+        updateStrategyUI();
+
+        // Photo Grid Logic
+        const grid = document.getElementById('photoGrid');
+        const saveOrderBtn = document.getElementById('saveOrderBtn');
+        const reorderForm = document.getElementById('reorderForm');
+        let draggedItem = null;
+
+        if (grid && saveOrderBtn && reorderForm) {
+          grid.addEventListener('dragstart', (e) => {
+            draggedItem = e.target.closest('.thumb');
+            if (draggedItem) {
+              setTimeout(() => draggedItem.classList.add('dragging'), 0);
+            }
+          });
+
+          grid.addEventListener('dragend', (e) => {
+            if (draggedItem) draggedItem.classList.remove('dragging');
+            draggedItem = null;
+          });
+
+          grid.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const currentItem = document.querySelector('.dragging');
+            if (!currentItem) return;
+
+            const target = e.target.closest('.thumb:not(.dragging)');
+            if (target && target !== currentItem) {
+              const box = target.getBoundingClientRect();
+              const isAfter = (e.clientX - box.left) > (box.width / 2);
+              isAfter ? target.after(currentItem) : target.before(currentItem);
+              saveOrderBtn.style.display = 'inline-block';
+            }
+          });
+
+          reorderForm.addEventListener('submit', (e) => {
+            grid.querySelectorAll('.thumb-name').forEach(nameDiv => {
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'ordered_files';
+              input.value = nameDiv.getAttribute('data-filename');
+              reorderForm.appendChild(input);
+            });
+          });
+        }
+
+        // Taxonomy Search Logic
+        const searchTaxonomyBtn = document.getElementById('searchTaxonomyBtn');
+        const taxonomyModal = document.getElementById('taxonomyModal');
+        const closeTaxonomyBtn = document.getElementById('closeTaxonomyBtn');
+        const taxonomyQuery = document.getElementById('taxonomyQuery');
+        const taxonomyResults = document.getElementById('taxonomyResults');
+        const taxonomyInput = document.getElementById('Etsy Taxonomy ID');
+        const taxonomyResolved = document.getElementById('etsyTaxonomyResolved');
+
+        if (searchTaxonomyBtn && taxonomyModal) {
+          searchTaxonomyBtn.addEventListener('click', () => {
+            taxonomyModal.style.display = 'flex';
+            if (taxonomyQuery) taxonomyQuery.focus();
+          });
+
+          if (closeTaxonomyBtn) {
+            closeTaxonomyBtn.addEventListener('click', () => {
+              taxonomyModal.style.display = 'none';
+            });
+          }
+
+          if (taxonomyQuery) {
+            taxonomyQuery.addEventListener('input', async (e) => {
+              const q = e.target.value;
+              if (q.length < 2) {
+                taxonomyResults.innerHTML = '';
+                return;
+              }
+              try {
+                const res = await fetch(`/api/etsy/taxonomy/search?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                
+                taxonomyResults.innerHTML = data.results.map(item => `
+                  <div class="taxonomy-result-item" data-id="${item.id}" data-name="${item.name}" style="padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer;">
+                    <div style="font-weight: 600; font-size: 0.9rem;">${item.name}</div>
+                    <div style="font-size: 0.75rem; color: #64748b;">ID: ${item.id}</div>
+                  </div>
+                `).join('');
+
+                document.querySelectorAll('.taxonomy-result-item').forEach(el => {
+                  el.addEventListener('click', () => {
+                    const id = el.dataset.id;
+                    const name = el.dataset.name;
+                    if (taxonomyInput) taxonomyInput.value = id;
+                    if (taxonomyResolved) taxonomyResolved.innerText = name;
+                    taxonomyModal.style.display = 'none';
+                  });
+                });
+              } catch (err) {
+                console.error("Taxonomy search failed", err);
+              }
+            });
+          }
+        }
+
+        // Revise Logic
+        const reviseForm = document.getElementById("reviseForm");
+        const reviseButton = document.getElementById("reviseButton");
+        const reviseLoadingOverlay = document.getElementById("reviseLoadingOverlay");
+        let reviseSubmitting = false;
+
+        if (reviseForm && reviseButton && reviseLoadingOverlay) {
+          const reviseLoadingTitle = reviseLoadingOverlay.querySelector(".loading-title");
+          const reviseLoadingCopy = reviseLoadingOverlay.querySelector(".loading-copy");
+          const reviseSteps = [
+            { title: "Sending your revision request", copy: "Passing your current draft to AI for targeted edits." },
+            { title: "Reviewing the item again", copy: "Re-checking the details so wording stays grounded in photos." },
+            { title: "Updating the listing draft", copy: "Applying the requested changes while keeping manual fields." }
+          ];
+
+          function setReviseStep(index) {
+            const step = reviseSteps[index % reviseSteps.length];
+            if (reviseLoadingTitle) reviseLoadingTitle.textContent = step.title;
+            if (reviseLoadingCopy) reviseLoadingCopy.textContent = step.copy;
+          }
+
+          reviseForm.addEventListener("submit", (event) => {
+            if (reviseSubmitting) {
+              event.preventDefault();
+              return;
+            }
+            reviseSubmitting = true;
+            reviseForm.classList.add("is-loading");
+            reviseLoadingOverlay.classList.add("active");
+            
+            let stepIndex = 0;
+            setReviseStep(0);
+            window.setInterval(() => {
+              stepIndex += 1;
+              setReviseStep(stepIndex);
+            }, 2200);
+
+            reviseButton.textContent = "Revising...";
+            reviseButton.disabled = true;
+          });
+        }
+      } catch (err) {
+        console.error("Main initialization failed", err);
       }
     });
-
-    reviseForm.addEventListener("submit", (event) => {
-      if (reviseSubmitting) {
-        event.preventDefault();
-        return;
-      }
-
-      reviseSubmitting = true;
-      reviseForm.classList.add("is-loading");
-      reviseLoadingOverlay.classList.add("active");
-      reviseLoadingOverlay.setAttribute("aria-hidden", "false");
-      startReviseLoadingState();
-      reviseButton.textContent = "Revising...";
-      reviseButton.disabled = true;
-    });
-
-    setReviseStep(0);
   </script>
 
   <div id="editorModal" class="editor-modal">
