@@ -364,8 +364,8 @@
             {{ csrf_input() }}
             <input type="hidden" name="current_filter" value="{{ current_filter }}">
             <div class="field">
-              <label for="Listing Strategy">Listing Strategy</label>
-              <select id="Listing Strategy" name="Listing Strategy" onchange="toggleStrategyFields()">
+              <label for="ListingStrategy">Listing Strategy</label>
+              <select id="ListingStrategy" name="Listing Strategy" onchange="toggleStrategyFields()">
                 <option value="auction" {% if form.get('Listing Strategy', 'auction') == 'auction' %}selected{% endif %}>Auction (InventoryManager Batch)</option>
                 <option value="retail" {% if form.get('Listing Strategy') == 'retail' %}selected{% endif %}>Retail (eBay / Etsy)</option>
               </select>
@@ -429,7 +429,7 @@
 
             <script>
               function toggleStrategyFields() {
-                var strategy = document.getElementById("Listing Strategy").value;
+                var strategy = document.getElementById("ListingStrategy").value;
                 document.getElementById("retail_fields").style.display = (strategy === 'retail') ? 'block' : 'none';
               }
             </script>
@@ -681,7 +681,7 @@
         try {
           const formData = new FormData();
           formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-          formData.append('strategy', document.getElementById('Listing Strategy').value);
+          formData.append('strategy', document.getElementById('ListingStrategy').value);
 
           const res = await fetch(`/api/items/{{ item['lot_number'] }}/reanalyze`, {
             method: 'POST',
@@ -711,9 +711,16 @@
           <h3 style="margin-top:0;">Option ${opt.rank}</h3>
           <div style="font-size: 0.9rem; margin-bottom: 8px;"><strong>Title:</strong> ${opt.title}</div>
           <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 12px;">${opt.identification}</div>
-          <button type="button" class="small-button" onclick='applyAiOption(${JSON.stringify(opt).replace(/'/g, "&apos;")})' style="padding: 6px 12px; font-size: 0.8rem;">Use This Option</button>
+          <button type="button" class="small-button use-ai-option-btn" data-opt='${JSON.stringify(opt).replace(/'/g, "&apos;")}' style="padding: 6px 12px; font-size: 0.8rem;">Use This Option</button>
         </div>
       `).join('');
+
+      document.querySelectorAll('.use-ai-option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+           const opt = JSON.parse(btn.getAttribute('data-opt'));
+           applyAiOption(opt);
+        });
+      });
     }
 
     window.applyAiOption = function(opt) {
@@ -738,7 +745,7 @@
       aiOptionsModal.classList.remove('active');
       
       if (pd.ebay || pd.etsy) {
-        const strategySelect = document.getElementById('Listing Strategy');
+        const strategySelect = document.getElementById('ListingStrategy');
         if (strategySelect) {
             strategySelect.value = 'retail';
             if (typeof toggleStrategyFields === 'function') toggleStrategyFields();
