@@ -371,15 +371,54 @@
               </select>
             </div>
 
-            <div id="retail_fields" style="display: {% if form.get('Listing Strategy') == 'retail' %}block{% else %}none{% endif %}; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #eef2ff; margin-bottom: 14px;">
-              <p style="margin-top: 0; font-weight: bold; margin-bottom: 8px;">Retail Platform Settings</p>
+            <div id="retail_fields" style="display: {% if form.get('Listing Strategy') == 'retail' %}block{% else %}none{% endif %}; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #f5f7ff; margin-bottom: 14px;">
+              <p style="margin-top: 0; font-weight: bold; color: #1e3a8a; margin-bottom: 12px;">Retail Platform Settings</p>
+              
+              <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div class="field" style="margin-bottom: 0;">
+                  <label for="Price">Suggested Price ($)</label>
+                  <input type="text" id="Price" name="Price" value="{{ form.get('Price', '0.00') }}" placeholder="0.00">
+                </div>
+                <div class="field" style="margin-bottom: 0;">
+                  <label for="Quantity">Quantity</label>
+                  <input type="number" id="Quantity" name="Quantity" value="{{ form.get('Quantity', '1') }}" min="1">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="eBay SEO Title">eBay Optimized Title</label>
+                <input type="text" id="eBay SEO Title" name="eBay SEO Title" value="{{ form.get('eBay SEO Title', '') }}">
+              </div>
+
               <div class="field">
                 <label for="eBay Category ID">eBay Category ID</label>
                 <input type="text" id="eBay Category ID" name="eBay Category ID" value="{{ form.get('eBay Category ID', '') }}" placeholder="e.g. 123456">
               </div>
-              <div class="field" style="margin-bottom: 0;">
+
+              <div class="field">
                 <label for="Etsy Taxonomy ID">Etsy Taxonomy ID</label>
                 <input type="text" id="Etsy Taxonomy ID" name="Etsy Taxonomy ID" value="{{ form.get('Etsy Taxonomy ID', '') }}" placeholder="e.g. 1234">
+              </div>
+
+              <div class="field">
+                <label for="Etsy Tags">Etsy Tags (Comma separated)</label>
+                <textarea id="Etsy Tags" name="Etsy Tags" rows="2">{{ form.get('Etsy Tags', '') }}</textarea>
+              </div>
+
+              <div class="field">
+                <label for="Etsy Materials">Etsy Materials (Comma separated)</label>
+                <textarea id="Etsy Materials" name="Etsy Materials" rows="2">{{ form.get('Etsy Materials', '') }}</textarea>
+              </div>
+
+              <div style="display: flex; gap: 12px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                  <input type="checkbox" name="Publish to Etsy" value="yes" {% if form.get('Publish to Etsy') == 'yes' %}checked{% endif %}>
+                  Publish to Etsy
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal;">
+                  <input type="checkbox" name="Publish to eBay" value="yes" {% if form.get('Publish to eBay') == 'yes' %}checked{% endif %}>
+                  Publish to eBay
+                </label>
               </div>
             </div>
 

@@ -86,6 +86,16 @@ def update_saved_item(lot_number: int):
         "Item Notes": request.form.get("Item Notes", "").strip(),
         "Consigner #": request.form.get("Consigner #", "").strip(),
         "Shipping Available": request.form.get("Shipping Available", "").strip() or "No",
+        "Listing Strategy": request.form.get("Listing Strategy", "auction"),
+        "Price": request.form.get("Price", "0.00"),
+        "Quantity": request.form.get("Quantity", "1"),
+        "eBay SEO Title": request.form.get("eBay SEO Title", ""),
+        "eBay Category ID": request.form.get("eBay Category ID", ""),
+        "Etsy Taxonomy ID": request.form.get("Etsy Taxonomy ID", ""),
+        "Etsy Tags": request.form.get("Etsy Tags", ""),
+        "Etsy Materials": request.form.get("Etsy Materials", ""),
+        "Publish to Etsy": request.form.get("Publish to Etsy", ""),
+        "Publish to eBay": request.form.get("Publish to eBay", ""),
     }
 
     validation_errors = validate_save_form(form)
@@ -105,6 +115,12 @@ def update_saved_item(lot_number: int):
         )
 
     new_status = update_saved_item_record(lot_number, form)
+    
+    # Trigger publishing if strategy is retail
+    if form.get("Listing Strategy") == "retail":
+        from ..integrations.publisher import process_platform_publishing
+        process_platform_publishing(lot_number, form, item.get("image_folder", ""))
+
     if new_status == ITEM_STATUS_NEEDS_UPDATE:
         flash(f"Updated lot {lot_number}. Status changed to needs_update so it can be re-exported.")
     else:

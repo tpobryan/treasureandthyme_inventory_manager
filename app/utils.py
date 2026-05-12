@@ -348,9 +348,14 @@ def form_from_saved_item(record: dict[str, str]) -> dict[str, str]:
         "Shipping Available": record.get("shipping_available", "") or "No",
         "Listing Strategy": record.get("listing_strategy", "auction"),
         "eBay Category ID": platform_data.get("ebay_category_id", ""),
+        "eBay SEO Title": platform_data.get("ebay_seo_title", ""),
         "Etsy Taxonomy ID": platform_data.get("etsy_taxonomy_id", ""),
-        "Publish to eBay": "yes" if platform_data.get("publish_to_ebay") else "",
-        "Publish to Etsy": "yes" if platform_data.get("publish_to_etsy") else "",
+        "Etsy Tags": platform_data.get("etsy_tags", ""),
+        "Etsy Materials": platform_data.get("etsy_materials", ""),
+        "Price": platform_data.get("etsy_price", "0.00"),
+        "Quantity": platform_data.get("etsy_quantity", "1"),
+        "Publish to eBay": "yes" if platform_data.get("publish_to_ebay") else "no",
+        "Publish to Etsy": "yes" if platform_data.get("publish_to_etsy") else "no",
     }
 
 def parse_decimal_field(value: str) -> float | None:

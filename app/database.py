@@ -1470,7 +1470,14 @@ def saved_item_fields_from_form(form: dict[str, str]) -> dict[str, str]:
         "listing_strategy": form.get("Listing Strategy", "auction"),
         "platform_data": json.dumps({
             "ebay_category_id": form.get("eBay Category ID", ""),
+            "ebay_seo_title": form.get("eBay SEO Title", ""),
             "etsy_taxonomy_id": form.get("Etsy Taxonomy ID", ""),
+            "etsy_tags": form.get("Etsy Tags", ""),
+            "etsy_materials": form.get("Etsy Materials", ""),
+            "etsy_price": form.get("Price", "0.00"),
+            "etsy_quantity": form.get("Quantity", "1"),
+            "publish_to_ebay": form.get("Publish to eBay") == "yes",
+            "publish_to_etsy": form.get("Publish to Etsy") == "yes",
         }) if form.get("Listing Strategy") == "retail" else "",
     }
 
