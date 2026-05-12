@@ -1,5 +1,5 @@
 import logging
-from database import ensure_item_store_ready, connect_item_store
+from app.database import ensure_item_store_ready, connect_item_store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -3,15 +3,16 @@ import os
 from ftplib import FTP, FTP_TLS, error_perm
 from pathlib import Path
 from typing import Any
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 
 def connect_ftp():
-    host = os.getenv("FTP_HOST", "").strip()
-    username = os.getenv("FTP_USERNAME", "").strip()
-    password = os.getenv("FTP_PASSWORD", "").strip()
-    port = int(os.getenv("FTP_PORT", "21"))
-    use_tls = os.getenv("FTP_TLS", "false").lower() == "true"
+    host = settings.FTP_HOST.strip()
+    username = settings.FTP_USERNAME.strip()
+    password = settings.FTP_PASSWORD.strip()
+    port = settings.FTP_PORT
+    use_tls = settings.FTP_TLS
 
     if not host or not username or not password:
         raise ValueError("FTP credentials are missing in .env")

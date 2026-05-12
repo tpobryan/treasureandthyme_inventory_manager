@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 from flask import current_app
-from database import get_platform_credentials, update_platform_status
-from integrations.etsy import EtsyIntegration
-from integrations.ebay import EbayIntegration
+from ..database import get_platform_credentials, update_platform_status
+from .etsy import EtsyIntegration
+from .ebay import EbayIntegration
 
 # Registry of platform integrations
 PLATFORMS = {

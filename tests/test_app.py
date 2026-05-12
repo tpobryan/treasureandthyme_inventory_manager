@@ -5,13 +5,14 @@ from pathlib import Path
 
 import pytest
 
-import app as app_module
-import database as db_module
-import utils as utils_module
-import routes.exports as exports_module
-import routes.items as items_module
-import routes.main as main_module
-import routes.admin as admin_module
+import app.app as app_module
+import app.database as db_module
+import app.utils as utils_module
+import app.routes.exports as exports_module
+import app.routes.items as items_module
+import app.routes.main as main_module
+import app.routes.admin as admin_module
+from app.config import settings
 
 
 def fetch_csrf_token(client, path="/login"):
@@ -29,53 +30,36 @@ def test_env(tmp_path, monkeypatch):
     uploads_dir.mkdir(parents=True, exist_ok=True)
     exports_dir.mkdir(parents=True, exist_ok=True)
 
-    original_paths = {
-        "DATA_DIR": db_module.DATA_DIR,
-        "UPLOADS_DIR": utils_module.UPLOADS_DIR,
-        "EXPORTS_DIR": db_module.EXPORTS_DIR,
-        "_DB_INITIALIZED": db_module._DB_INITIALIZED,
-    }
-
-    db_module.DATA_DIR = data_dir
-    utils_module.UPLOADS_DIR = uploads_dir
-    items_module.UPLOADS_DIR = uploads_dir
-    main_module.UPLOADS_DIR = uploads_dir
-    admin_module.UPLOADS_DIR = uploads_dir
-    db_module.EXPORTS_DIR = exports_dir
-    utils_module.EXPORTS_DIR = exports_dir
-    exports_module.EXPORTS_DIR = exports_dir
-    db_module._DB_INITIALIZED = False
-    db_module._DB_INITIALIZED_URL = None
-    app_module.app.config["TESTING"] = True
-    app_module.app.config["WTF_CSRF_ENABLED"] = False
-    monkeypatch.setenv("DATABASE_URL", "")
-    monkeypatch.setenv("AUCTION_NUMBER", "")
-    monkeypatch.setenv("FTP_HOST", "")
-    monkeypatch.setenv("FTP_PORT", "21")
-    monkeypatch.setenv("FTP_USERNAME", "")
-    monkeypatch.setenv("FTP_PASSWORD", "")
-    monkeypatch.setenv("FTP_TLS", "false")
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "")
-    monkeypatch.setenv("APP_LOGIN_PASSWORD", "")
+    # Override settings for testing
+    monkeypatch.setattr(settings, "DATA_DIR", data_dir)
+    monkeypatch.setattr(settings, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(settings, "EXPORTS_DIR", exports_dir)
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{data_dir / 'test.db'}")
+    monkeypatch.setattr(settings, "AUCTION_NUMBER", 4)
+    monkeypatch.setattr(settings, "APP_LOGIN_PASSWORD", "")
+    monkeypatch.setattr(settings, "FTP_HOST", "")
+    
+    # Sync modules that use these paths (Legacy support)
+    monkeypatch.setattr(db_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(utils_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(items_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(main_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(admin_module, "UPLOADS_DIR", uploads_dir)
+    monkeypatch.setattr(db_module, "EXPORTS_DIR", exports_dir)
+    monkeypatch.setattr(utils_module, "EXPORTS_DIR", exports_dir)
+    monkeypatch.setattr(exports_module, "EXPORTS_DIR", exports_dir)
+    
+    monkeypatch.setattr(db_module, "_DB_INITIALIZED", False)
+    monkeypatch.setattr(db_module, "_DB_INITIALIZED_URL", None)
+    monkeypatch.setitem(app_module.app.config, "TESTING", True)
+    monkeypatch.setitem(app_module.app.config, "WTF_CSRF_ENABLED", False)
+    monkeypatch.setitem(app_module.app.config, "SQLALCHEMY_DATABASE_URI", settings.effective_database_url)
 
     yield {
         "client": app_module.app.test_client(),
         "uploads_dir": uploads_dir,
         "exports_dir": exports_dir,
     }
-
-    for name, value in original_paths.items():
-        if name == "UPLOADS_DIR":
-            setattr(utils_module, name, value)
-            setattr(items_module, name, value)
-            setattr(main_module, name, value)
-            setattr(admin_module, name, value)
-        elif name == "EXPORTS_DIR":
-            setattr(db_module, name, value)
-            setattr(utils_module, name, value)
-            setattr(exports_module, name, value)
-        else:
-            setattr(db_module, name, value)
 
 
 def test_validate_save_form_rejects_blank_title_and_bad_estimates():
@@ -105,8 +89,8 @@ def test_validate_save_form_rejects_non_numeric_estimates():
 
 
 def test_login_redirects_when_auth_is_enabled(test_env, monkeypatch):
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
-    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    monkeypatch.setattr(settings, "APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setattr(settings, "APP_LOGIN_PASSWORD", "secret")
 
     response = test_env["client"].get("/", follow_redirects=False)
 
@@ -116,8 +100,8 @@ def test_login_redirects_when_auth_is_enabled(test_env, monkeypatch):
 
 def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch):
     app_module.app.config["WTF_CSRF_ENABLED"] = True
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
-    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    monkeypatch.setattr(settings, "APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setattr(settings, "APP_LOGIN_PASSWORD", "secret")
     csrf_token = fetch_csrf_token(test_env["client"])
 
     bad_login = test_env["client"].post(
@@ -140,8 +124,8 @@ def test_login_allows_access_when_credentials_are_correct(test_env, monkeypatch)
 
 def test_login_rejects_missing_csrf_token_when_auth_is_enabled(test_env, monkeypatch):
     app_module.app.config["WTF_CSRF_ENABLED"] = True
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
-    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    monkeypatch.setattr(settings, "APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setattr(settings, "APP_LOGIN_PASSWORD", "secret")
 
     response = test_env["client"].post(
         "/login",
@@ -154,8 +138,8 @@ def test_login_rejects_missing_csrf_token_when_auth_is_enabled(test_env, monkeyp
 
 def test_login_rejects_external_redirect_target(test_env, monkeypatch):
     app_module.app.config["WTF_CSRF_ENABLED"] = True
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
-    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    monkeypatch.setattr(settings, "APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setattr(settings, "APP_LOGIN_PASSWORD", "secret")
     csrf_token = fetch_csrf_token(test_env["client"])
 
     response = test_env["client"].post(
@@ -174,8 +158,8 @@ def test_login_rejects_external_redirect_target(test_env, monkeypatch):
 
 
 def test_healthz_stays_available_when_auth_is_enabled(test_env, monkeypatch):
-    monkeypatch.setenv("APP_LOGIN_USERNAME", "owner")
-    monkeypatch.setenv("APP_LOGIN_PASSWORD", "secret")
+    monkeypatch.setattr(settings, "APP_LOGIN_USERNAME", "owner")
+    monkeypatch.setattr(settings, "APP_LOGIN_PASSWORD", "secret")
 
     response = test_env["client"].get("/healthz")
 
@@ -248,7 +232,7 @@ def test_save_with_invalid_data_does_not_write_csv(test_env):
 
 def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.record_ftp_upload(
         lot_number=3056,
@@ -278,7 +262,7 @@ def test_record_and_delete_ftp_upload_record_in_database(test_env, tmp_path, mon
 
 def test_reserve_next_auction_photo_index_in_database(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     assert db_module.get_next_auction_photo_index("12") == 1
     assert db_module.reserve_next_auction_photo_index("12") == 1
@@ -389,7 +373,7 @@ def test_reorder_draft_photos(test_env):
 
 def test_active_draft_round_trip_in_database(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     draft_dir = test_env["uploads_dir"] / "draftdb"
     draft_dir.mkdir(parents=True, exist_ok=True)
@@ -442,7 +426,8 @@ def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
     (draft_dir / "photo.jpg").write_bytes(b"fake image")
 
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
+    app_module.app.config["SQLALCHEMY_DATABASE_URI"] = settings.effective_database_url
 
     response = test_env["client"].post(
         "/save",
@@ -510,7 +495,7 @@ def test_save_uses_database_when_configured(test_env, tmp_path, monkeypatch):
 
 def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -562,7 +547,7 @@ def test_export_csv_downloads_database_rows(test_env, tmp_path, monkeypatch):
 
 def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -640,7 +625,7 @@ def test_manage_items_and_export_selected_csv(test_env, tmp_path, monkeypatch):
 
 def test_edit_saved_item_page_loads(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -675,7 +660,7 @@ def test_edit_saved_item_page_loads(test_env, tmp_path, monkeypatch):
 
 def test_updating_published_item_marks_needs_update(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -737,7 +722,7 @@ def test_updating_published_item_marks_needs_update(test_env, tmp_path, monkeypa
 
 def test_remove_saved_item_hides_it_from_manage_and_export(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -786,7 +771,7 @@ def test_remove_saved_item_hides_it_from_manage_and_export(test_env, tmp_path, m
 
 def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -852,7 +837,7 @@ def test_manage_items_status_filter_views_removed_and_ready(test_env, tmp_path, 
 
 def test_restore_removed_ready_item_returns_to_ready(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -899,7 +884,7 @@ def test_restore_removed_ready_item_returns_to_ready(test_env, tmp_path, monkeyp
 
 def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -948,7 +933,7 @@ def test_restore_removed_published_item_returns_to_needs_update(test_env, tmp_pa
 
 def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
     archived = test_env["exports_dir"] / "auction_4_batch_2000-2001_20260408.csv"
     archived.write_text("Lot Number,Lead\n2000,Lamp\n", encoding="utf-8")
     with sqlite3.connect(db_path) as connection:
@@ -977,7 +962,7 @@ def test_export_history_lists_and_downloads_archives(test_env, tmp_path, monkeyp
 
 def test_export_batch_details_show_current_lot_statuses(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -1037,7 +1022,8 @@ def test_export_batch_details_show_current_lot_statuses(test_env, tmp_path, monk
 
 def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
+    app_module.app.config["SQLALCHEMY_DATABASE_URI"] = settings.effective_database_url
 
     db_module.append_item_record(
         {
@@ -1121,7 +1107,7 @@ def test_dashboard_shows_counts_and_recent_exports(test_env, tmp_path, monkeypat
 
 def test_database_bootstraps_current_auction_four(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     response = test_env["client"].get("/")
 
@@ -1138,7 +1124,7 @@ def test_database_bootstraps_current_auction_four(test_env, tmp_path, monkeypatc
 
 def test_create_and_switch_auction_updates_visible_scope(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     create_response = test_env["client"].post(
         "/auctions/create_next",
@@ -1213,7 +1199,7 @@ def test_create_and_switch_auction_updates_visible_scope(test_env, tmp_path, mon
 
 def test_auctions_overview_shows_statuses_and_counts(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
 
@@ -1276,7 +1262,7 @@ def test_auctions_overview_shows_statuses_and_counts(test_env, tmp_path, monkeyp
 
 def test_move_saved_item_to_another_auction_resets_publish_state(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
     test_env["client"].post("/auctions/switch", data={"auction_id": "4", "return_to": "/"})
@@ -1325,7 +1311,7 @@ def test_move_saved_item_to_another_auction_resets_publish_state(test_env, tmp_p
 
 def test_bulk_remove_and_restore_items(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     for lot_number, title in [(2030, "Lamp"), (2031, "Chair")]:
         db_module.append_item_record(
@@ -1393,7 +1379,7 @@ def test_bulk_remove_and_restore_items(test_env, tmp_path, monkeypatch):
 
 def test_bulk_move_items_to_another_auction(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     test_env["client"].post("/auctions/create_next", data={"return_to": "/"})
     test_env["client"].post("/auctions/switch", data={"auction_id": "4", "return_to": "/"})
@@ -1470,7 +1456,7 @@ def test_edit_draft_photo(test_env):
 
 def test_edit_saved_photo(test_env, tmp_path, monkeypatch):
     db_path = tmp_path / "auction_items.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_path}")
 
     db_module.append_item_record(
         {
@@ -1524,7 +1510,7 @@ def test_auto_enhance_preview(test_env, monkeypatch):
         with open(target, "wb") as f:
             f.write(b"enhanced")
     
-    monkeypatch.setattr("routes.main.apply_auto_enhance", mock_enhance)
+    monkeypatch.setattr("app.routes.main.apply_auto_enhance", mock_enhance)
     
     response = test_env["client"].post(
         "/api/auto_enhance_preview",
@@ -1549,10 +1535,10 @@ def test_etsy_taxonomy_api(test_env, tmp_path, monkeypatch):
     with open(data_dir / "etsy_taxonomy.json", "w") as f:
         json.dump(dummy_data, f)
         
-    import integrations.taxonomy
-    monkeypatch.setattr(integrations.taxonomy, "DATA_DIR", data_dir)
-    monkeypatch.setattr(integrations.taxonomy, "TAXONOMY_FILE", data_dir / "etsy_taxonomy.json")
-    monkeypatch.setattr(integrations.taxonomy, "FLAT_TAXONOMY_FILE", data_dir / "etsy_taxonomy_flat.json")
+    import app.integrations.taxonomy as taxonomy_module
+    monkeypatch.setattr(taxonomy_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(taxonomy_module, "TAXONOMY_FILE", data_dir / "etsy_taxonomy.json")
+    monkeypatch.setattr(taxonomy_module, "FLAT_TAXONOMY_FILE", data_dir / "etsy_taxonomy_flat.json")
 
     # Test Search
     response = test_env["client"].get("/api/etsy/taxonomy/search?q=acc")

@@ -1,8 +1,8 @@
 import json
 import logging
 from flask import Blueprint, request, jsonify, current_app
-from database import connect_item_store, ensure_item_store_ready
-from routes.integrations import PLATFORMS
+from ..database import connect_item_store, ensure_item_store_ready
+from .integrations import PLATFORMS
 
 webhooks_bp = Blueprint("webhooks", __name__)
 logger = logging.getLogger(__name__)

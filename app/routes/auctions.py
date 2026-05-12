@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 
-from database import (
+from ..database import (
     create_next_auction,
     switch_current_auction,
     update_auction_status,

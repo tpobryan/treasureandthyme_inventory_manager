@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 TAXONOMY_FILE = DATA_DIR / "etsy_taxonomy.json"
 FLAT_TAXONOMY_FILE = DATA_DIR / "etsy_taxonomy_flat.json"
 

@@ -6,7 +6,8 @@ import secrets
 import json
 from typing import Any, Dict
 from flask import current_app
-from integrations.base import PlatformIntegration
+from .base import PlatformIntegration
+from ..config import settings
 
 class EtsyIntegration(PlatformIntegration):
     """
@@ -14,9 +15,9 @@ class EtsyIntegration(PlatformIntegration):
     """
 
     def __init__(self):
-        self.client_id = os.getenv("ETSY_KEY_STRING", "")
-        self.shared_secret = os.getenv("ETSY_SHARED_SECRET", "")
-        self.redirect_uri = os.getenv("ETSY_REDIRECT_URI", "http://localhost:5005/api/integrations/etsy/connect")
+        self.client_id = settings.ETSY_KEY_STRING
+        self.shared_secret = settings.ETSY_SHARED_SECRET
+        self.redirect_uri = settings.ETSY_REDIRECT_URI
         self.api_base = "https://openapi.etsy.com/v3"
 
     def _get_headers(self, access_token: str = None) -> Dict[str, str]:

@@ -1,9 +1,9 @@
 import base64
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 from werkzeug.utils import secure_filename
-from image_processor import apply_auto_enhance
+from ..integrations.image_processor import apply_auto_enhance
 
-from database import (
+from ..database import (
     ITEM_STATUS_READY,
     ITEM_STATUS_NEEDS_UPDATE,
     ITEM_STATUS_REMOVED,
@@ -21,14 +21,14 @@ from database import (
     reserve_next_auction_photo_index,
     record_ftp_upload,
 )
-from utils import (
+from ..utils import (
     UPLOADS_DIR,
     DEFAULT_CATEGORIES,
     validate_save_form,
     form_from_saved_item,
     load_saved_files_for_temp_id,
 )
-from ftp_client import upload_lot_photos_to_inventory_manager
+from ..integrations.ftp_client import upload_lot_photos_to_inventory_manager
 
 items_bp = Blueprint("items", __name__)
 

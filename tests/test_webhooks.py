@@ -1,10 +1,11 @@
 import os
-os.environ["DATABASE_URL"] = "sqlite:///test.db"
+# DATABASE_URL set via settings in fixture
 
 import pytest
-from app import app
-from database import connect_item_store, ensure_item_store_ready
-from routes.integrations import PLATFORMS
+from app.app import app
+from app.database import connect_item_store, ensure_item_store_ready
+from app.config import settings
+from app.routes.integrations import PLATFORMS
 
 class MockEbayIntegration:
     def delete_listing(self, lot_number, remote_id):
@@ -14,6 +15,9 @@ PLATFORMS["ebay"] = MockEbayIntegration()
 
 @pytest.fixture
 def client():
+    # Override settings for testing
+    settings.DATABASE_URL = "sqlite:///test.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = settings.effective_database_url
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
     with app.test_client() as client:

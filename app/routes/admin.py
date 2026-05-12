@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app
 
-from ftp_client import (
+from ..integrations.ftp_client import (
     delete_lot_photos_from_inventory_manager,
     upload_lot_photos_to_inventory_manager,
 )
-from database import (
+from ..database import (
     fetch_saved_item,
     reserve_next_auction_photo_index,
     get_ftp_upload_record,
@@ -14,6 +14,7 @@ from database import (
     connect_item_store,
     ensure_item_store_ready
 )
+from ..utils import UPLOADS_DIR
 
 admin_bp = Blueprint("admin", __name__)
 

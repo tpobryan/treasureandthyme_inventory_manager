@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
-from utils import auth_enabled, auth_username, auth_password, is_authenticated, is_safe_local_url
-from extensions import limiter
+from ..utils import auth_enabled, auth_username, auth_password, is_authenticated, is_safe_local_url
+from ..extensions import limiter
 
 auth_bp = Blueprint("auth", __name__)
 

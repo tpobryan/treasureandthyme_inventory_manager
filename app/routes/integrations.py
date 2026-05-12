@@ -1,10 +1,10 @@
 from flask import Blueprint, jsonify, request, redirect, url_for
-from database import connect_item_store, ensure_item_store_ready
+from ..database import connect_item_store, ensure_item_store_ready
 import json
 import logging
 import requests
-from integrations.etsy import EtsyIntegration
-from integrations.ebay import EbayIntegration
+from ..integrations.etsy import EtsyIntegration
+from ..integrations.ebay import EbayIntegration
 
 integrations_bp = Blueprint("integrations", __name__)
 logger = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from integrations.ebay import EbayIntegration
+from app.integrations.ebay import EbayIntegration
 
 @pytest.fixture
 def ebay():

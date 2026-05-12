@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from integrations.taxonomy import flatten_taxonomy, get_taxonomy_name, search_taxonomy
+from app.integrations.taxonomy import flatten_taxonomy, get_taxonomy_name, search_taxonomy
 
 @pytest.fixture
 def mock_taxonomy_data(tmp_path, monkeypatch):
@@ -35,10 +35,10 @@ def mock_taxonomy_data(tmp_path, monkeypatch):
         json.dump(dummy_data, f)
         
     # Monkeypatch the DATA_DIR in taxonomy.py
-    import integrations.taxonomy
-    monkeypatch.setattr(integrations.taxonomy, "DATA_DIR", data_dir)
-    monkeypatch.setattr(integrations.taxonomy, "TAXONOMY_FILE", taxonomy_file)
-    monkeypatch.setattr(integrations.taxonomy, "FLAT_TAXONOMY_FILE", data_dir / "etsy_taxonomy_flat.json")
+    import app.integrations.taxonomy as taxonomy_module
+    monkeypatch.setattr(taxonomy_module, "DATA_DIR", data_dir)
+    monkeypatch.setattr(taxonomy_module, "TAXONOMY_FILE", taxonomy_file)
+    monkeypatch.setattr(taxonomy_module, "FLAT_TAXONOMY_FILE", data_dir / "etsy_taxonomy_flat.json")
     
     return data_dir
 

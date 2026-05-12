@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-EXPORTS_DIR = DATA_DIR / "exports"
+from .config import settings
+
+DATA_DIR = settings.DATA_DIR
+EXPORTS_DIR = settings.EXPORTS_DIR
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -46,17 +47,11 @@ _DB_INITIALIZED_URL = ""
 
 
 def get_database_url() -> str:
-    url = os.getenv("DATABASE_URL", "").strip()
-    if not url:
-        return f"sqlite:///{DATA_DIR / 'auction_items.db'}"
-    return url
+    return settings.effective_database_url
 
 
 def default_auction_id() -> int:
-    raw_value = os.getenv("CURRENT_AUCTION_ID", "").strip() or os.getenv("AUCTION_NUMBER", "").strip()
-    if raw_value.isdigit():
-        return int(raw_value)
-    return DEFAULT_AUCTION_ID
+    return settings.effective_auction_id
 
 
 def _extract_row_value(row: Any, key: str, index: int = 0, default: Any = None) -> Any:

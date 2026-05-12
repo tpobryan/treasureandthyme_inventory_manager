@@ -8,12 +8,12 @@ from pathlib import Path
 from flask import Blueprint, render_template, request, flash, redirect, url_for, send_from_directory, current_app, session
 from werkzeug.utils import secure_filename
 
-from image_processor import apply_auto_enhance
+from ..integrations.image_processor import apply_auto_enhance
 
-from inventory_manager_generator import InventoryManagerGenerator
-from ftp_client import upload_lot_photos_to_inventory_manager
-from integrations.publisher import process_platform_publishing, PLATFORMS
-from database import (
+from ..inventory_manager_generator import InventoryManagerGenerator
+from ..integrations.ftp_client import upload_lot_photos_to_inventory_manager
+from ..integrations.publisher import process_platform_publishing, PLATFORMS
+from ..database import (
     ITEM_STATUS_READY,
     ITEM_STATUS_NEEDS_UPDATE,
     get_current_auction_id,
@@ -33,7 +33,7 @@ from database import (
     get_platform_credentials,
     initialize_platform_status,
 )
-from utils import (
+from ..utils import (
     UPLOADS_DIR,
     DEFAULT_CATEGORIES,
     get_draft_owner_token,
@@ -52,7 +52,7 @@ from utils import (
     save_uploaded_files,
     save_uploaded_files_to_dir,
 )
-from database import fetch_active_draft as db_fetch_active_draft
+from ..database import fetch_active_draft as db_fetch_active_draft
 
 main_bp = Blueprint("main", __name__)
 generator = InventoryManagerGenerator()

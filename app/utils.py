@@ -13,9 +13,11 @@ from flask import request, session, flash, current_app
 from markupsafe import Markup
 from werkzeug.utils import secure_filename
 
-from image_processor import ALLOWED_EXTENSIONS, HEIF_SUPPORT_ENABLED, optimize_image
-import database as db_module
-from database import (
+from .config import settings
+
+from .integrations.image_processor import ALLOWED_EXTENSIONS, HEIF_SUPPORT_ENABLED, optimize_image
+from . import database as db_module
+from .database import (
     DATA_DIR,
     EXPORTS_DIR,
     fetch_active_draft as db_fetch_active_draft,
@@ -63,13 +65,13 @@ DEFAULT_CATEGORIES = [
 ]
 
 def auth_enabled() -> bool:
-    return bool(os.getenv("APP_LOGIN_PASSWORD", "").strip())
+    return bool(settings.APP_LOGIN_PASSWORD)
 
 def auth_username() -> str:
-    return os.getenv("APP_LOGIN_USERNAME", "admin").strip() or "admin"
+    return settings.APP_LOGIN_USERNAME
 
 def auth_password() -> str:
-    return os.getenv("APP_LOGIN_PASSWORD", "").strip()
+    return settings.APP_LOGIN_PASSWORD
 
 def is_authenticated() -> bool:
     return bool(session.get("authenticated"))

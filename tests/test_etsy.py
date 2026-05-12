@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from integrations.etsy import EtsyIntegration
+from app.integrations.etsy import EtsyIntegration
 
 @pytest.fixture
 def etsy():
@@ -11,8 +11,8 @@ def etsy():
 def mock_app(monkeypatch):
     mock = MagicMock()
     # Mock current_app.logger
-    import integrations.etsy
-    monkeypatch.setattr(integrations.etsy, "current_app", mock)
+    import app.integrations.etsy as etsy_module
+    monkeypatch.setattr(etsy_module, "current_app", mock)
     return mock
 
 def test_etsy_headers(etsy):

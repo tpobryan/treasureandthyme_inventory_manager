@@ -3,7 +3,8 @@ import requests
 import base64
 import json
 from typing import Any, Dict
-from integrations.base import PlatformIntegration
+from .base import PlatformIntegration
+from ..config import settings
 
 class EbayIntegration(PlatformIntegration):
     """
@@ -11,10 +12,10 @@ class EbayIntegration(PlatformIntegration):
     """
 
     def __init__(self):
-        self.client_id = os.getenv("EBAY_CLIENT_ID", "")
-        self.client_secret = os.getenv("EBAY_CLIENT_SECRET", "")
-        self.runame = os.getenv("EBAY_RUNAME", "")
-        self.redirect_uri = os.getenv("EBAY_REDIRECT_URI", "")
+        self.client_id = settings.EBAY_CLIENT_ID
+        self.client_secret = settings.EBAY_CLIENT_SECRET
+        self.runame = settings.EBAY_RUNAME
+        self.redirect_uri = settings.EBAY_REDIRECT_URI
         self.api_base = "https://api.ebay.com/sell/inventory/v1"
         self.auth_base = "https://auth.ebay.com/oauth2/authorize"
         self.token_url = "https://api.ebay.com/identity/v1/oauth2/token"
