@@ -620,6 +620,33 @@
           {% endif %}
         </div>
       </form>
+      
+      {% if orphaned_drafts %}
+        <div class="danger-section">
+          <h2 class="danger-title" style="color: var(--accent); margin-bottom: 12px;">Past Unfinished Drafts</h2>
+          <div class="file-list">
+            {% for draft in orphaned_drafts %}
+              <div class="file-item" style="padding: 14px; display: block;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div style="font-weight: 600;">Draft with {{ draft.image_count }} photos</div>
+                  <div style="font-size: 0.85rem; color: var(--muted);">Updated {{ draft.updated_at }}</div>
+                </div>
+                {% if draft.seller_notes %}
+                  <div style="font-size: 0.9rem; margin-bottom: 10px; color: var(--muted);">Notes: {{ draft.seller_notes|truncate(100) }}</div>
+                {% endif %}
+                <div class="button-row" style="margin-top: 0;">
+                  <a class="button-link" href="{{ url_for('main.resume_draft', temp_id=draft.temp_id) }}" style="padding: 8px 14px; font-size: 0.9rem;">Resume</a>
+                  <form action="{{ url_for('main.discard_draft') }}" method="post" style="display:inline;">
+                    {{ csrf_input() }}
+                    <input type="hidden" name="temp_id" value="{{ draft.temp_id }}">
+                    <button type="submit" class="secondary" style="padding: 8px 14px; font-size: 0.9rem; width: auto;">Discard</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
 
       <div class="footer-note">
         Item storage: Local database. Export a fresh CSV when you are ready to import lots into InventoryManager.
