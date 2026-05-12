@@ -815,6 +815,7 @@
                   <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
                   <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
                   <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+                  <input type="hidden" name="option_{{ op.rank }}_platform_data" value='{{ op.platform_data|tojson }}'>
                 {% endfor %}
 
                 <input type="hidden" name="chosen_rank" value="{{ option.rank }}">
@@ -875,6 +876,7 @@
               <input type="hidden" name="option_{{ op.rank }}_category" value="{{ op.category }}">
               <input type="hidden" name="option_{{ op.rank }}_condition_summary" value="{{ op.condition_summary }}">
               <input type="hidden" name="option_{{ op.rank }}_keywords" value="{{ op.keywords }}">
+              <input type="hidden" name="option_{{ op.rank }}_platform_data" value='{{ op.platform_data|tojson }}'>
             {% endfor %}
 
             <input type="hidden" name="Identification" value="{{ form['Identification'] }}">

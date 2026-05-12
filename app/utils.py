@@ -250,6 +250,7 @@ def options_from_request() -> list[dict]:
                 "category": request.form.get(f"option_{i}_category", "").strip() or "Other",
                 "condition_summary": request.form.get(f"option_{i}_condition_summary", "").strip(),
                 "keywords": request.form.get(f"option_{i}_keywords", "").strip(),
+                "platform_data": json.loads(request.form.get(f"option_{i}_platform_data", "{}")),
             }
         )
     return options
