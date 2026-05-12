@@ -79,9 +79,11 @@ def is_authenticated() -> bool:
 def get_draft_owner_token() -> str:
     token = str(session.get("draft_owner_token", "")).strip()
     if token:
+        current_app.logger.info("[Draft] Existing token found: %s", token)
         return token
     token = secrets.token_urlsafe(24)
     session["draft_owner_token"] = token
+    current_app.logger.info("[Draft] New token generated: %s", token)
     return token
 
 def get_csrf_token() -> str:
