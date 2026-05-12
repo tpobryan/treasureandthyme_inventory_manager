@@ -244,3 +244,31 @@ def edit_saved_photo():
     except Exception as exc:
         current_app.logger.exception("Failed to edit photo")
         return {"success": False, "error": str(exc)}, 500
+@items_bp.route("/api/items/<int:lot_number>/reanalyze", methods=["POST"])
+def reanalyze_item(lot_number: int):
+    from ..inventory_manager_generator import InventoryManagerGenerator
+    
+    item = fetch_saved_item(lot_number)
+    if not item:
+        return {"success": False, "error": "Lot not found"}, 404
+        
+    image_folder = item.get("image_folder", "")
+    saved_files = load_saved_files_for_temp_id(image_folder)
+    if not saved_files:
+        return {"success": False, "error": "No images found for this lot"}, 404
+
+    # Use item notes or description for analysis
+    seller_notes = item.get("item_notes", "") or item.get("description", "")
+    strategy = request.form.get("strategy", "retail")
+    
+    generator = InventoryManagerGenerator()
+    try:
+        result = generator.generate_options(
+            saved_files,
+            seller_notes=seller_notes,
+            strategy=strategy
+        )
+        return {"success": True, "options": result.get("options", [])}
+    except Exception as exc:
+        current_app.logger.exception("AI re-analysis failed")
+        return {"success": False, "error": str(exc)}, 500

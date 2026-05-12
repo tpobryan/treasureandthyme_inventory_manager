@@ -371,6 +371,11 @@
               </select>
             </div>
 
+            <div class="field">
+              <button type="button" id="btnReanalyze" class="secondary" style="width: 100%; background: #fff; border: 1px solid #bfdbfe; color: #1d4ed8;">✨ Re-Analyze with AI</button>
+              <div class="help" style="margin-top: 4px; font-size: 0.8rem; color: var(--muted);">Use AI to re-examine photos and populate retail fields (Etsy Tags, Materials, etc.)</div>
+            </div>
+
             <div id="retail_fields" style="display: {% if form.get('Listing Strategy') == 'retail' %}block{% else %}none{% endif %}; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: #f5f7ff; margin-bottom: 14px;">
               <p style="margin-top: 0; font-weight: bold; color: #1e3a8a; margin-bottom: 12px;">Retail Platform Settings</p>
               
@@ -660,8 +665,88 @@
         document.getElementById("btnSaveEdit").disabled = false;
         document.getElementById("btnToggleEnhance").disabled = false;
         document.getElementById("btnSaveEdit").textContent = "Save";
-      });
     });
+
+    // Re-analyze logic
+    const btnReanalyze = document.getElementById('btnReanalyze');
+    const aiOptionsModal = document.getElementById('aiOptionsModal');
+    const aiOptionsContainer = document.getElementById('aiOptionsContainer');
+
+    if (btnReanalyze) {
+      btnReanalyze.addEventListener('click', async () => {
+        const originalText = btnReanalyze.textContent;
+        btnReanalyze.textContent = '⏳ Analyzing...';
+        btnReanalyze.disabled = true;
+
+        try {
+          const formData = new FormData();
+          formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+          formData.append('strategy', document.getElementById('Listing Strategy').value);
+
+          const res = await fetch(`/api/items/{{ item['lot_number'] }}/reanalyze`, {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            renderAiOptions(data.options);
+            aiOptionsModal.classList.add('active');
+          } else {
+            alert('Re-analysis failed: ' + data.error);
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Network error during re-analysis.');
+        } finally {
+          btnReanalyze.textContent = originalText;
+          btnReanalyze.disabled = false;
+        }
+      });
+    }
+
+    function renderAiOptions(options) {
+      aiOptionsContainer.innerHTML = options.map(opt => `
+        <div class="card" style="padding: 12px; margin-bottom: 12px; border: 1px solid #e2e8f0; background: #f8fafc;">
+          <h3 style="margin-top:0;">Option ${opt.rank}</h3>
+          <div style="font-size: 0.9rem; margin-bottom: 8px;"><strong>Title:</strong> ${opt.title}</div>
+          <div style="font-size: 0.85rem; color: var(--muted); margin-bottom: 12px;">${opt.identification}</div>
+          <button type="button" class="small-button" onclick='applyAiOption(${JSON.stringify(opt).replace(/'/g, "&apos;")})' style="padding: 6px 12px; font-size: 0.8rem;">Use This Option</button>
+        </div>
+      `).join('');
+    }
+
+    window.applyAiOption = function(opt) {
+      if (document.getElementById('Title')) document.getElementById('Title').value = opt.title || '';
+      if (document.getElementById('Description')) document.getElementById('Description').value = opt.description || '';
+      if (document.getElementById('Condition Summary')) document.getElementById('Condition Summary').value = opt.condition_summary || '';
+      if (document.getElementById('Keywords')) document.getElementById('Keywords').value = opt.keywords || '';
+      if (document.getElementById('Category')) document.getElementById('Category').value = opt.category || 'Other';
+
+      const pd = opt.platform_data || {};
+      const ebay = pd.ebay || {};
+      if (document.getElementById('eBay SEO Title')) document.getElementById('eBay SEO Title').value = ebay.seo_title || '';
+      if (document.getElementById('eBay Category ID')) document.getElementById('eBay Category ID').value = ebay.category_id || '';
+      
+      const etsy = pd.etsy || {};
+      if (document.getElementById('Price')) document.getElementById('Price').value = (etsy.suggested_price || 0).toFixed(2);
+      if (document.getElementById('Quantity')) document.getElementById('Quantity').value = etsy.suggested_quantity || 1;
+      if (document.getElementById('Etsy Taxonomy ID')) document.getElementById('Etsy Taxonomy ID').value = etsy.taxonomy_id || '';
+      if (document.getElementById('Etsy Tags')) document.getElementById('Etsy Tags').value = (etsy.tags || []).join(', ');
+      if (document.getElementById('Etsy Materials')) document.getElementById('Etsy Materials').value = (etsy.materials || []).join(', ');
+
+      aiOptionsModal.classList.remove('active');
+      
+      if (pd.ebay || pd.etsy) {
+        const strategySelect = document.getElementById('Listing Strategy');
+        if (strategySelect) {
+            strategySelect.value = 'retail';
+            if (typeof toggleStrategyFields === 'function') toggleStrategyFields();
+        }
+      }
+      
+      alert('AI option applied! Review the fields and click Save Changes.');
+    };
   </script>
-</body>
+<div id="aiOptionsModal" class="editor-modal" style="padding: 40px 20px; overflow-y: auto; justify-content: flex-start; z-index: 200;"><div class="card" style="max-width: 600px; width: 100%; margin: 0 auto;"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;"><h2 style="margin: 0;">AI Identification Options</h2><button type="button" onclick="document.getElementById('aiOptionsModal').classList.remove('active')" style="background: none; color: var(--muted); padding: 0; font-size: 1.5rem; border:0; cursor:pointer;">&times;</button></div><p class="sub">Pick an option to populate the form fields below.</p><div id="aiOptionsContainer"></div><div class="button-row" style="justify-content: flex-end; margin-top: 20px;"><button type="button" class="secondary" onclick="document.getElementById('aiOptionsModal').classList.remove('active')">Cancel</button></div></div></div></body>
 </html>
