@@ -1410,6 +1410,13 @@
         if (retryAnalyzeOpenBtn && retryAnalyzeForm) {
           retryAnalyzeOpenBtn.addEventListener("click", () => {
             if (confirm("This will re-run the full AI analysis on your photos. Existing edits might be overwritten. Continue?")) {
+              // Sync strategy from the dropdown before submitting
+              const strategySelect = document.getElementById("Listing Strategy");
+              const strategyInput = retryAnalyzeForm.querySelector('input[name="strategy"]');
+              if (strategySelect && strategyInput) {
+                strategyInput.value = strategySelect.value;
+              }
+              
               retryAnalyzeOpenBtn.textContent = "Analyzing...";
               retryAnalyzeOpenBtn.disabled = true;
               retryAnalyzeForm.submit();
