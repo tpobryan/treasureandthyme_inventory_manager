@@ -170,6 +170,43 @@ def analyze():
         form=form,
     )
 
+@main_bp.route("/retry_analyze", methods=["POST"])
+def retry_analyze():
+    temp_id = request.form.get("temp_id", "").strip()
+    seller_notes = request.form.get("seller_notes", "").strip()
+    strategy = request.form.get("strategy", "auction").strip()
+
+    saved_files = load_saved_files_for_temp_id(temp_id)
+    if not saved_files:
+        flash("No photos found to analyze.")
+        return redirect(url_for("main.index"))
+
+    try:
+        ai_data = generator.generate_options(
+            saved_files, 
+            seller_notes=seller_notes,
+            strategy=strategy
+        )
+        options = ai_data.get("options", [])
+        
+        # Default to first option
+        form = {}
+        if options:
+            form = form_from_option(options[0], seller_notes=seller_notes)
+        
+        set_active_draft(
+            temp_id=temp_id,
+            seller_notes=seller_notes,
+            options=options,
+            form=form,
+        )
+    except Exception as exc:
+        current_app.logger.exception("AI retry analysis failed")
+        flash(f"AI analysis failed: {exc}")
+        return redirect(url_for("main.resume_draft", temp_id=temp_id))
+
+    return redirect(url_for("main.resume_draft", temp_id=temp_id))
+
 @main_bp.route("/choose_option", methods=["POST"])
 def choose_option():
     temp_id = request.form.get("temp_id", "").strip()

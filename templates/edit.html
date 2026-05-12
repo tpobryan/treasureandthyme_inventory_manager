@@ -1177,7 +1177,15 @@
           <div class="button-row" style="margin-top: 24px;">
             <button type="submit" id="saveButton" name="action" value="save">Save to Database</button>
             <button type="button" class="secondary" id="reviseOpenBtn">Revise with AI</button>
+            <button type="button" class="secondary" id="retryAnalyzeOpenBtn" style="background: #fef3c7; color: #92400e; border-color: #fde68a;">Retry Full Analysis</button>
           </div>
+        </form>
+
+        <form id="retryAnalyzeForm" action="{{ url_for('main.retry_analyze') }}" method="post" style="display:none;">
+          {{ csrf_input() }}
+          <input type="hidden" name="temp_id" value="{{ temp_id }}">
+          <input type="hidden" name="seller_notes" value="{{ seller_notes }}">
+          <input type="hidden" name="strategy" value="{{ form.get('Listing Strategy', 'auction') }}">
         </form>
       </div> <!-- Close Final Draft card -->
     </div> <!-- Close Right Column -->
@@ -1393,6 +1401,19 @@
 
             reviseButton.textContent = "Revising...";
             reviseButton.disabled = true;
+          });
+        }
+
+        // Retry Analyze Logic
+        const retryAnalyzeOpenBtn = document.getElementById("retryAnalyzeOpenBtn");
+        const retryAnalyzeForm = document.getElementById("retryAnalyzeForm");
+        if (retryAnalyzeOpenBtn && retryAnalyzeForm) {
+          retryAnalyzeOpenBtn.addEventListener("click", () => {
+            if (confirm("This will re-run the full AI analysis on your photos. Existing edits might be overwritten. Continue?")) {
+              retryAnalyzeOpenBtn.textContent = "Analyzing...";
+              retryAnalyzeOpenBtn.disabled = true;
+              retryAnalyzeForm.submit();
+            }
           });
         }
       } catch (err) {
