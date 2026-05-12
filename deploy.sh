@@ -49,6 +49,9 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
+export FLASK_APP=app.app
+flask db upgrade
+
 # Ensure the app can write to its socket and data directory
 sudo chown -R tobryan:www-data .
 sudo chmod -R 775 data
