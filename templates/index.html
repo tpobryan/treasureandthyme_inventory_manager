@@ -486,6 +486,12 @@
   </style>
 </head>
 <body>
+  <div style="background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 0; margin-bottom: 20px;">
+    <div style="max-width: 860px; margin: 0 auto; padding: 0 18px; display: flex; justify-content: flex-end; gap: 12px;">
+      <a class="button-link secondary" href="{{ url_for('main.dashboard') }}" style="padding: 8px 14px; font-size: 0.9rem;">Inventory Dashboard</a>
+      <a class="button-link secondary" href="{{ url_for('items.manage_items') }}" style="padding: 8px 14px; font-size: 0.9rem;">Manage Inventory</a>
+    </div>
+  </div>
   <div class="wrap">
     <div style="display: flex; justify-content: flex-end; margin-bottom: 12px; gap: 12px;">
       <a href="{{ url_for('admin.admin') }}" style="text-decoration: none; font-size: 0.9rem; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 4px;">
