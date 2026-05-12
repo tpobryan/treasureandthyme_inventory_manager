@@ -74,4 +74,3 @@ class Settings(BaseSettings):
         return 4 # Default
 
 settings = Settings()
-print(f"DEBUG: Loaded OPENAI_API_KEY: {settings.OPENAI_API_KEY[:10]}...")

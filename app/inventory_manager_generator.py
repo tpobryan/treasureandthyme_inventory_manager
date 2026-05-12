@@ -460,10 +460,12 @@ def _normalize_output(data: dict[str, Any]) -> dict[str, list[dict[str, str | in
     return {"options": normalized}
 
 
+from .config import settings
+
 class InventoryManagerGenerator:
     def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
-        self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY", "dummy-key-if-missing"))
-        self.model = model or os.getenv("OPENAI_MODEL", "gpt-4.1")
+        self.client = OpenAI(api_key=api_key or settings.OPENAI_API_KEY)
+        self.model = model or settings.OPENAI_MODEL
 
     def generate_options(
         self,
