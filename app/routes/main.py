@@ -520,6 +520,17 @@ def reset():
 
 @main_bp.route("/resume_draft", methods=["GET"])
 def resume_draft():
+    temp_id_arg = request.args.get("temp_id")
+    if temp_id_arg:
+        # Recover/Set it as active first
+        draft = db_fetch_active_draft(temp_id_arg, owner_token=get_draft_owner_token())
+        if draft:
+            session["active_temp_id"] = temp_id_arg
+            current_app.logger.info("[Draft] Setting active_temp_id from param: %s", temp_id_arg)
+        else:
+            flash("That draft is not available in this browser session.")
+            return redirect(url_for("main.index"))
+
     active_draft = get_active_draft()
     if not active_draft:
         flash("No resumable draft was found.")
