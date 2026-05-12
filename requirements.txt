@@ -10,3 +10,6 @@ pillow-heif>=0.16.0
 Flask-Limiter>=3.0.0
 cryptography>=41.0.0
 requests
+pydantic-settings>=2.0.0
+Flask-Migrate>=4.0.0
+Flask-SQLAlchemy>=3.1.0
