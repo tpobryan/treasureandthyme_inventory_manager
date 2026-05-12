@@ -153,6 +153,13 @@ def analyze():
     except Exception as exc:
         current_app.logger.exception("AI analysis failed")
         flash(f"AI analysis failed: {exc}")
+        # Preserve the draft so the user doesn't lose photos
+        set_active_draft(
+            temp_id=temp_id,
+            seller_notes=seller_notes,
+            options=[],
+            form={},
+        )
         return redirect(url_for("main.index"))
 
     return render_edit_page(
