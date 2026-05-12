@@ -400,16 +400,18 @@ def _parse_model_json(text: str) -> dict[str, Any]:
     raise ValueError(f"Could not parse model response as JSON: {raw}")
 
 
-def _build_image_content(image_paths: list[Path]) -> list[dict[str, str]]:
-    content: list[dict[str, str]] = []
+def _build_image_content(image_paths: list[Path]) -> list[dict[str, Any]]:
+    content: list[dict[str, Any]] = []
     for path in image_paths:
         mime = _guess_mime_type(path)
         with path.open("rb") as f:
             b64 = base64.b64encode(f.read()).decode("utf-8")
         content.append(
             {
-                "type": "input_image",
-                "image_url": f"data:{mime};base64,{b64}",
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime};base64,{b64}"
+                },
             }
         )
     return content
@@ -465,7 +467,7 @@ from .config import settings
 class InventoryManagerGenerator:
     def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.client = OpenAI(api_key=api_key or settings.OPENAI_API_KEY)
-        self.model = model or settings.OPENAI_MODEL
+        self.model = model or settings.OPENAI_MODEL or "gpt-4o"
 
     def generate_options(
         self,
@@ -501,15 +503,18 @@ Prefer practical resale phrasing.
 Return only valid JSON.
 """.strip()
 
-        content = [{"type": "input_text", "text": prompt}]
+        content = [{"type": "text", "text": prompt}]
         content.extend(_build_image_content(image_paths))
 
-        response = self.client.responses.create(
+        response = self.client.chat.completions.create(
             model=self.model,
-            input=[{"role": "user", "content": content}],
+            messages=[{"role": "user", "content": content}],
+            max_tokens=2000,
+            response_format={"type": "json_object"}
         )
 
-        data = _parse_model_json(response.output_text)
+        raw_content = response.choices[0].message.content
+        data = _parse_model_json(raw_content)
         return _normalize_output(data)
 
     def revise_option(
@@ -575,15 +580,18 @@ Return only valid JSON.
     keywords
     """.strip()
 
-        content = [{"type": "input_text", "text": prompt}]
+        content = [{"type": "text", "text": prompt}]
         content.extend(_build_image_content(image_paths))
 
-        response = self.client.responses.create(
+        response = self.client.chat.completions.create(
             model=self.model,
-            input=[{"role": "user", "content": content}],
+            messages=[{"role": "user", "content": content}],
+            max_tokens=2000,
+            response_format={"type": "json_object"}
         )
 
-        data = _parse_model_json(response.output_text)
+        raw_content = response.choices[0].message.content
+        data = _parse_model_json(raw_content)
         revised = _normalize_option(data, 1)
 
         # Soft fallback: preserve key fields if the model returns them blank

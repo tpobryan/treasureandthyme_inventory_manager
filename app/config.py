@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # AI settings
     OPENAI_API_KEY: str = "dummy-key-if-missing"
-    OPENAI_MODEL: str = "gpt-4.1"
+    OPENAI_MODEL: str = "gpt-4o"
 
     # Etsy settings
     ETSY_KEY_STRING: str = ""

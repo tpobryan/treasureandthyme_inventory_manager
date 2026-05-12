@@ -50,7 +50,8 @@ def publish_to_platform(platform_id: str, lot_number: int, form: Dict[str, Any],
 
     # 2. Prepare item data
     # We need full image paths
-    uploads_dir = Path(current_app.root_path) / "data" / "uploads"
+    from ..config import settings
+    uploads_dir = settings.UPLOADS_DIR
     final_dir = uploads_dir / image_folder
     image_paths = sorted([str(p) for p in final_dir.iterdir() if p.is_file() and p.suffix.lower() in [".jpg", ".jpeg", ".png"]])
 
