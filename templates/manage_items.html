@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Manage Export Batches</title>
+  <title>Manage Inventory</title>
   <style>
     :root {
       --bg: #f6f7fb;
@@ -310,9 +310,9 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Manage Export Batches</h1>
-      <p class="sub">Choose the saved lots you want to include in the next InventoryManager CSV export.</p>
-      <p class="sub">Status flow: new saves start as <strong>ready</strong>, exported lots become <strong>published</strong>, and future saved-item edits can move published lots to <strong>needs update</strong>.</p>
+      <h1>Manage Inventory</h1>
+      <p class="sub">Review your items, manage retail listings, and prepare auction export batches.</p>
+      <p class="sub">New items start as <strong>ready</strong>. Retail items show platform status, while auction lots move to <strong>published</strong> after export.</p>
 
       {% if current_auction %}
         <div class="auction-panel">
@@ -468,7 +468,7 @@
 
         <div class="footer-actions">
           <div class="inline-actions">
-            <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
+            <a class="button-link secondary" href="{{ url_for('main.dashboard') }}">Inventory Dashboard</a>
             <a class="button-link secondary" href="{{ url_for('auctions.auctions_overview') }}">Auctions</a>
             <a class="button-link secondary" href="{{ url_for('exports.export_history') }}">Export History</a>
             {% if auth_enabled and is_authenticated %}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inventory Manager | Dashboard</title>
+  <title>Inventory Manager | Inventory Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -292,13 +292,13 @@
   <div class="wrap">
     <div class="topbar">
       <div>
-        <h1>Auction Dashboard</h1>
-        <p class="sub">A quick view of what is ready, what has been published, and what still needs attention.</p>
+        <h1>Inventory Dashboard</h1>
+        <p class="sub">Monitor your retail listings and auction lots in one place.</p>
       </div>
       <div class="button-row">
         <a class="button-link secondary" href="{{ url_for('main.index') }}">Back to Upload</a>
         <a class="button-link secondary" href="{{ url_for('auctions.auctions_overview') }}">Auctions</a>
-        <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Manage Items</a>
+        <a class="button-link secondary" href="{{ url_for('items.manage_items') }}">Manage Inventory</a>
         <a class="button-link secondary" href="{{ url_for('exports.export_history') }}">Export History</a>
         {% if auth_enabled and is_authenticated %}
           <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">

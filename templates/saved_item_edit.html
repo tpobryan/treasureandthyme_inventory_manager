@@ -277,7 +277,7 @@
     {% endwith %}
 
     <div class="topbar">
-      <a class="back-link" href="{{ url_for('items.manage_items', status=current_filter) }}">← Back to manage items</a>
+      <a class="back-link" href="{{ url_for('items.manage_items', status=current_filter) }}">← Back to manage inventory</a>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         {% if auth_enabled and is_authenticated %}
           <form action="{{ url_for('auth.logout') }}" method="post" style="margin:0;">

@@ -510,7 +510,11 @@
 
     <div class="topbar">
       <a class="back-link" href="{{ url_for('main.index') }}">← Back to upload</a>
-      <div class="lot-preview">Next lot number on save: {{ next_lot }}</div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <a class="button-link secondary" href="{{ url_for('main.dashboard') }}" style="padding: 8px 14px; font-size: 0.9rem;">Inventory Dashboard</a>
+        <a class="button-link secondary" href="{{ url_for('items.manage_items') }}" style="padding: 8px 14px; font-size: 0.9rem;">Manage Inventory</a>
+        <div class="lot-preview" style="margin-left: 10px;">Next lot number on save: {{ next_lot }}</div>
+      </div>
     </div>
 
     <div class="layout">
